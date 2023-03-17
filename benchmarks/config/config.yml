@@ -1,0 +1,21 @@
+# ICESat-2 tests configuration
+loglevel: INFO
+logfile: null
+local_data_dir: "../../data"
+input_filename: ATL03_20181017222812_02950102_005_01.h5
+output_foldername: "."
+output_filename: atl_data.h5
+# some sample lat lon values from file ATL03_20181017222812_02950102_005_01.h5
+# index   lat    lon
+#      1: 26.999850  -106.987386
+#     12: 27.001845  -106.987607
+#    123: 27.022246  -106.984982
+#   1234: 27.222376  -107.006828
+#  12345: 29.223040  -107.232585
+# 123456: 49.191518  -109.742866
+min_lat: 27.0
+max_lat: 28.0  
+min_lon: -108.0
+max_lon: -107.0
+# end config
+

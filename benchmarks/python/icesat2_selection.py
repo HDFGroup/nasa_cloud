@@ -3,28 +3,9 @@ from collections import namedtuple
 import sys
 import logging
 import h5py
+import h5pyd
 import numpy as np
-# import h5pyd
-
-
-# config settings
-loglevel = logging.INFO
-foldername = "/home/john/mybuckets/hdf5/data/ICESat2/"
-input_filename = "ATL03_20181017222812_02950102_005_01.h5"
-output_filename = "atl_data.h5"
-# some sample lat lon values
-# index   lat    lon
-#      1: 26.999850  -106.987386
-#     12: 27.001845  -106.987607
-#    123: 27.022246  -106.984982
-#   1234: 27.222376  -107.006828
-#  12345: 29.223040  -107.232585
-# 123456: 49.191518  -109.742866
-min_lat = 27.0
-max_lat = 28.0  
-min_lon = -108.0
-max_lon = -107.0
-# end config
+import config
 
 ground_tracks = ("gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r")
 scalar_datasets = ("/orbit_info/sc_orient", 
@@ -191,49 +172,77 @@ def save_georegion(fout, bbox):
     fout.attrs["min_lon"] = bbox.min_lon
     fout.attrs["max_lon"] = bbox.max_lon
 
+def get_loglevel():
+    val = config.get("loglevel")
+    val = val.upper()
+    if val == "DEBUG":
+        loglevel = logging.DEBUG
+    elif val == "INFO":
+        loglevel = logging.INFO
+    elif val in ("WARN", "WARNING"):
+        loglevel = logging.WARNING
+    elif val == "ERROR":
+        loglevel = logging.ERROR
+    else:
+        choices = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+        raise ValueError(f"loglevel must be one of {choices}")
+    return loglevel
+
+# generic file open -> return h5py(filename) or h5pyd(filename)
+# based on a "hdf5://" prefix or not
+
+def h5File(filepath, mode='r'):
+    if filepath.startswith("hdf5://"):
+        return h5pyd.File(filepath, mode=mode)
+    else:
+        return h5py.File(filepath, mode=mode)
+
 #
 # main
 #
-if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
-        sys.exit(f"Usage: {sys.argv[0]} filepath min_lon max_lon min_lat max_lat")
 
+# setup logging
+logfname = config.get("log_file")
+loglevel = get_loglevel()
+logging.basicConfig(filename=logfname, format='%(levelname)s %(asctime)s %(message)s', level=loglevel)
+logging.debug(f"set log_level to {loglevel}")
 
-if len(sys.argv) > 1:
-    filepath = sys.argv[1]
-if len(sys.argv) > 2:
-    min_lon = float(sys.argv[2])
+input_dirname = config.get("local_data_dir")
+input_filename = config.get("input_filename")
+input_filepath = f"{input_dirname}/{input_filename}"
+logging.info(f"input filepath: {input_filepath}")
+output_dirname = config.get("output_foldername")
+output_filename = config.get("output_filename")
+output_filepath = f"{output_dirname}/{output_filename}"
+logging.info(f"output filepath: {output_filepath}")
+
+min_lon = config.get("min_lon")
 
 if min_lon < -180.0 or min_lon > 180.0:
     sys.exit(f"invalid min_lon value: {min_lon}")
-
-if len(sys.argv) > 3:    
-    max_lon = float(sys.argv[3])
+  
+max_lon = config.get("max_lon")
 if max_lon < -180.0 or max_lon > 180.0 or max_lon <= min_lon:
     sys.exit(f"invalid max_lon value: {max_lon}")
 
-if len(sys.argv) > 4:
-    min_lat = float(sys.argv[4])
+min_lat = config.get("min_lat")
 if min_lat < -90.0 or min_lat > 90.0:
     sys.exit(f"invalid min_lat value: {min_lat}")
 
-if len(sys.argv) > 5:
-    max_lat = float(sys.argv[5])
+max_lat = config.get("max_lat")
 if max_lat < -90.0 or max_lat > 90.0 or max_lat <= min_lat:
     sys.exit(f"invalid max_lat value: {max_lat}")
 
-
 logging.basicConfig(format='%(asctime)s %(message)s', level=loglevel)
-
 
 bbox = BBox(min_lon, max_lon, min_lat, max_lat)
 
-logging.info(f"input file: {foldername+input_filename}")
-logging.info(f"output file: {output_filename}")
 logging.info(f"lat range: {bbox.min_lat:.4f} - {bbox.max_lat:.4f}")
 logging.info(f"lon range: {bbox.min_lon:.4f} - {bbox.max_lon:.4f}")
 
 
-with h5py.File(foldername+input_filename) as fin, h5py.File(output_filename, "w") as fout:
+with h5File(input_filepath) as fin, h5File(output_filepath, "w") as fout:
     copy_root_attrs(fin, fout)
     copy_scalar_datasets(fin, fout)
     save_georegion(fout, bbox)
