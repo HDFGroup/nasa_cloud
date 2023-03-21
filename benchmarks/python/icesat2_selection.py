@@ -217,11 +217,11 @@ logging.debug(f"set log_level to {loglevel}")
 
 input_dirname = config.get("input_foldername")
 input_filename = config.get("input_filename")
-input_filepath = f"{input_dirname}/{input_filename}"
+input_filepath = f"{input_dirname}{input_filename}"
 logging.info(f"input filepath: {input_filepath}")
 output_dirname = config.get("output_foldername")
 output_filename = config.get("output_filename")
-output_filepath = f"{output_dirname}/{output_filename}"
+output_filepath = f"{output_dirname}{output_filename}"
 logging.info(f"output filepath: {output_filepath}")
 
 min_lon = config.get("min_lon")
