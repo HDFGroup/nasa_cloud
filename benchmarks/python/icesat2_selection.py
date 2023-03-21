@@ -2,6 +2,7 @@ from collections import namedtuple
 
 import sys
 import logging
+import s3fs
 import h5py
 import h5pyd
 import numpy as np
@@ -194,9 +195,15 @@ def get_loglevel():
 
 def h5File(filepath, mode='r'):
     if filepath.startswith("hdf5://"):
-        return h5pyd.File(filepath, mode=mode)
+        f = h5pyd.File(filepath, mode=mode)
+    elif filepath.startswith("s3://"):
+        if mode != 'r':
+            raise ValueError("s3fs can only be used with read access mode")
+        s3 = s3fs.S3FileSystem()
+        f = h5py.File(s3.open(filepath, 'rb'), mode=mode)
     else:
-        return h5py.File(filepath, mode=mode)
+        f = h5py.File(filepath, mode=mode)
+    return f
 
 #
 # main
@@ -208,7 +215,7 @@ loglevel = get_loglevel()
 logging.basicConfig(filename=logfname, format='%(levelname)s %(asctime)s %(message)s', level=loglevel)
 logging.debug(f"set log_level to {loglevel}")
 
-input_dirname = config.get("local_data_dir")
+input_dirname = config.get("input_foldername")
 input_filename = config.get("input_filename")
 input_filepath = f"{input_dirname}/{input_filename}"
 logging.info(f"input filepath: {input_filepath}")
