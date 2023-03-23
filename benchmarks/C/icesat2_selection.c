@@ -10,6 +10,7 @@
 #define FILEPATH_BUFFER_SIZE 1024
 
 #define PATH_DELIMITER "/"
+
 /*
  * Macro to push the current function to the current error stack
  * and then goto the "done" label, which should appear inside the
@@ -19,6 +20,14 @@
 	fprintf(stderr, "%s\n", err_msg);                                              \
 	fprintf(stderr, "\n");                                                         \
 	exit(1);																	   \
+
+/* Print if program is run with debug flag */
+#define PRINT_DEBUG(...)                                                                   \
+                if (debug) { 													       \
+					fprintf(stdout, __VA_ARGS__);                                  \
+				}                                                                  \
+
+bool debug = false;
 
 const char *ground_tracks[] = {"gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r", 0};
 
@@ -61,7 +70,7 @@ typedef struct Range {
 herr_t test_attr_callback(hid_t location_id, const char* attr_name, const H5A_info_t *ainfo, void *op_data) {
 	herr_t ret_value = SUCCEED;
 
-	printf("%s\n", attr_name);
+	PRINT_DEBUG("%s\n", attr_name);
 
 	return ret_value;
 }
@@ -106,7 +115,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		/* Copy scalar dataset paths to stack for strtok */
 		strncpy(current_dset_path, *current_dset, strlen(*current_dset) + 1);
 
-		printf("Copying scalar dset %s\n", current_dset_path);
+		PRINT_DEBUG("Copying scalar dset %s\n", current_dset_path);
 
 		dset = H5Dopen(fin, current_dset_path, H5P_DEFAULT);
 
@@ -169,11 +178,17 @@ herr_t copy_root_attrs(hid_t fin, hid_t fout) {
 	return ret_value;
 }
 
-int main() 
+int main(int argc, char **argv) 
 {
+
+	for (size_t optind = 1; optind < argc; optind++) {
+		if (strcmp(argv[optind], "-debug") == 0) {
+			debug = true;
+		}
+	}
+
 	hid_t fapl_id;
 	hid_t fcpl_id;
-
 
 	/* Initialize REST VOL connector */
 	//H5rest_init();
