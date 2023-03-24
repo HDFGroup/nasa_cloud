@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <yaml.h>
+
 #include "hdf5.h"
 
 #include "rest_vol_public.h"
@@ -27,6 +29,12 @@
                 if (debug) { 													       \
 					fprintf(stdout, __VA_ARGS__);                                  \
 				}                                                                  \
+
+#define LOCAL_PATH "/home/matthewlarson/Documents/nasa_cloud/data/"
+
+#define HSDS_PATH "/home/test_user1/"
+
+#define CONFIG_FILENAME "../config/config.yml"
 
 bool debug = false;
 
@@ -66,6 +74,26 @@ typedef struct Range {
 	double min;
 	double max;
 } Range;
+
+typedef struct ConfigValues {
+	char *loglevel;
+	char *logfile;
+	char *input_foldername;
+	char *input_filename;
+	char *output_foldername;
+	char *output_filename;
+
+	double min_lat;
+	double max_lat;
+	double min_lon;
+	double max_lon;
+} ConfigValues;
+
+typedef enum ConfigType {
+	CONFIG_UNKNOWN_T,
+	CONFIG_STRING_T,
+	CONFIG_DOUBLE_T
+} ConfigType;
 
 /* Testing callback for H5Aiterate that prints the name of each attribute of the parent object. */
 herr_t test_attr_callback(hid_t location_id, const char* attr_name, const H5A_info_t *ainfo, void *op_data) {
@@ -180,19 +208,155 @@ herr_t copy_root_attrs(hid_t fin, hid_t fout) {
 	return ret_value;
 }
 
-void attr_iteration_test(hid_t fin, hid_t fout) {
+void attr_iteration_test() {
+	hid_t file1 = H5Fcreate("/home/test_user1/temp1", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t file2 = H5Fcreate("/home/test_user1/temp2", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 	hid_t null_dstype= H5Screate(H5S_NULL);
 
-	hid_t attr1 = H5Acreate(fin, "attr1", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t attr2 = H5Acreate(fin, "attr2", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t attr3 = H5Acreate(fin, "attr3", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr1 = H5Acreate(file1, "attr1", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr2 = H5Acreate(file1, "attr2", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr3 = H5Acreate(file1, "attr3", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
 
-	copy_root_attrs(fin, fout);
-	H5Aiterate(fout, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &fout);
+	copy_root_attrs(file1, file2);
+	H5Aiterate(file2, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &file2);
 
+	H5Fclose(file1);
+	H5Fclose(file2);
 	H5Aclose(attr1);
 	H5Aclose(attr2);
 	H5Aclose(attr3);
+}
+
+/* Process one value from the yaml file. If the value is determined to be a keyname, 
+ *	this will recurse to assign the next parsed value as its keyvalue.
+ *
+ *	If type is CONFIG_UNKNOWN_T, then it expects to be the outermost layer, and for the next value to be a keyname. 
+ *	Otherwise, it expects to be a recursion, and for the next value to be a keyvalue of ConfigType type. 
+ */
+void process_layer(yaml_parser_t *parser, void *storage_location, ConfigType type) {
+	ConfigValues *config2;
+	ConfigType    new_type;
+	yaml_event_t  event;
+	yaml_char_t  *value;
+
+	if (type == CONFIG_UNKNOWN_T) 
+		config2 = (ConfigValues*) storage_location;
+
+	yaml_parser_parse(parser, &event);
+	value = event.data.scalar.value;
+
+	while(event.type != YAML_STREAM_END_EVENT) {
+
+		switch(event.type) {
+			case YAML_SCALAR_EVENT:
+				switch(type) {
+					case CONFIG_STRING_T: {
+						char *storage_loc = (char*) storage_location;
+						strcpy(storage_loc, value);
+
+						PRINT_DEBUG("Key assigned value %s from original %s\n", storage_loc, value)
+						break;
+					}
+					case CONFIG_DOUBLE_T: {
+						double dval = strtod((char *) value, NULL);
+
+						double *storage_loc = (double*) storage_location;
+						*storage_loc = dval;
+
+						PRINT_DEBUG("Key assigned value %lf\n", *((double*) storage_location))
+						break;
+					}
+					default: {
+						void *next_storage_location = NULL;
+
+						if (!strcmp("loglevel", value)) {
+							next_storage_location = config2->loglevel;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("logfile", value)) {
+							next_storage_location = config2->logfile;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("input_foldername", value)) {
+							next_storage_location = config2->input_foldername;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("input_filename", value)) {
+							next_storage_location = config2->input_filename;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("output_foldername", value)) {
+							next_storage_location = config2->output_foldername;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("output_filename", value)) {
+							next_storage_location = config2->output_filename;
+							new_type = CONFIG_STRING_T;
+						} else if (!strcmp("min_lat", value)) {
+							next_storage_location = (void*) &(config2->min_lat);
+							new_type = CONFIG_DOUBLE_T;
+						} else if (!strcmp("max_lat", value)) {
+							next_storage_location = (void*) &(config2->max_lat);
+							new_type = CONFIG_DOUBLE_T;
+						} else if (!strcmp("min_lon", value)) {
+							next_storage_location = (void*) &(config2->min_lon);
+							new_type = CONFIG_DOUBLE_T;
+						} else if (!strcmp("max_lon", value)) {
+							next_storage_location = (void*) &(config2->max_lon);
+							new_type = CONFIG_DOUBLE_T;
+						} else {
+							PRINT_DEBUG("Key name of %s not found\n", value)
+							FUNC_GOTO_ERROR("Invalid yaml option received")
+						}
+
+						PRINT_DEBUG("%s%s\n", "Recursing in yaml parsing to assign key ", value)
+						process_layer(parser, next_storage_location, new_type);
+						break;
+					}
+				}
+						
+				break;
+
+				PRINT_DEBUG("%s\n", "Non-scalar event")
+				break;
+		}
+
+		/* yaml_parser_parse allocates memory for event that must be freed */
+		yaml_event_delete(&event);
+
+		/* If this is a recursion, return to next layer up */
+		if (type != CONFIG_UNKNOWN_T) {
+			break;
+		}
+
+		yaml_parser_parse(parser, &event);
+		value = event.data.scalar.value;
+	}
+}
+
+/* Allocate internal memory for config and begin parsing the yaml file. */
+ConfigValues* get_config_values(char *yaml_config_filename, ConfigValues *config) {
+	config->loglevel = malloc(FILEPATH_BUFFER_SIZE);
+	config->logfile = malloc(FILEPATH_BUFFER_SIZE);
+	config->input_foldername = malloc(FILEPATH_BUFFER_SIZE);
+	config->input_filename = malloc(FILEPATH_BUFFER_SIZE);
+	config->output_foldername = malloc(FILEPATH_BUFFER_SIZE);
+	config->output_filename = malloc(FILEPATH_BUFFER_SIZE);
+
+	yaml_parser_t parser;
+	yaml_parser_initialize(&parser);
+
+	FILE *config_input = fopen(yaml_config_filename, "r");
+
+	if (config_input == NULL) {
+		FUNC_GOTO_ERROR("failed to open config.yml");
+	}
+
+	yaml_parser_set_input_file(&parser, config_input);
+
+	/* Get values */
+	process_layer(&parser, (void*) config, CONFIG_UNKNOWN_T);
+
+	/* Cleanup */
+	yaml_parser_delete(&parser);
+	fclose(config_input);
+
+	return config;
 }
 
 int main(int argc, char **argv) 
@@ -204,39 +368,39 @@ int main(int argc, char **argv)
 		}
 	}
 
-	//yaml_parser_t parser;
-	
+	ConfigValues *config = malloc(sizeof(*config));
+	config = get_config_values(CONFIG_FILENAME, config);
+
 	hid_t fapl_id;
 	hid_t fcpl_id;
 
 	/* Initialize REST VOL connector */
-	H5rest_init();
+	//H5rest_init();
 	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-	H5Pset_fapl_rest_vol(fapl_id);
+	//H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
 
-	// local_path = /home/matthewlarson/Documents/nasa_cloud/data/
-	// hsds_path = /home/test_user1/
-	hid_t atl = H5Fopen("/home/test_user1/ATL03_20181017222812_02950102_005_01.h5", H5F_ACC_RDWR, fapl_id);
-	hid_t atl_out = H5Fcreate("/home/test_user1/atl_out.h5", H5F_ACC_TRUNC, fcpl_id, fapl_id);
-	
-	hid_t file1 = H5Fcreate("/home/test_user1/temp1", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t file2 = H5Fcreate("/home/test_user1/temp2", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t atl = H5Fopen(LOCAL_PATH "ATL03_20181017222812_02950102_005_01.h5", H5F_ACC_RDWR, fapl_id);
+	hid_t atl_out = H5Fcreate(LOCAL_PATH "atl_out.h5", H5F_ACC_TRUNC, fcpl_id, fapl_id);
 
-	attr_iteration_test(file1, file2);
+	//attr_iteration_test();
 	copy_scalar_datasets(atl, atl_out);
 
-
 	/* Close open objects */
-	// TODO: Error handling
-	H5Fclose(file1);
-	H5Fclose(file2);
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
 	H5Fclose(atl);
 	H5Fclose(atl_out);
+	// TODO free all
+	free(config->loglevel);
+	free(config->logfile);
+	free(config->input_foldername);
+	free(config->input_filename);
+	free(config->output_foldername);
+	free(config->output_filename);
+	free(config);
 	
 	/* Terminate the REST VOL connector. */
-	H5rest_term();
+	//H5rest_term();
 	return 0;
 }
