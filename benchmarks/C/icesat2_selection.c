@@ -30,10 +30,6 @@
 					fprintf(stdout, __VA_ARGS__);                                  \
 				}                                                                  \
 
-#define LOCAL_PATH "/home/matthewlarson/Documents/nasa_cloud/data/"
-
-#define HSDS_PATH "/home/test_user1/"
-
 #define CONFIG_FILENAME "../config/config.yml"
 
 bool debug = false;
@@ -70,10 +66,15 @@ typedef struct BBox {
 	double max_lat;
 } BBox;
 
-typedef struct Range {
+typedef struct Range_Indices {
+	size_t min;
+	size_t max;
+} Range_Indices;
+
+typedef struct Range_Doubles {
 	double min;
 	double max;
-} Range;
+} Range_Doubles;
 
 typedef struct ConfigValues {
 	char *loglevel;
@@ -226,6 +227,39 @@ void attr_iteration_test() {
 	H5Aclose(attr2);
 	H5Aclose(attr3);
 }
+
+/* Get min and max values for the given array within the given range*/
+Range_Doubles get_minmax(double arr[], Range_Indices range) {
+	Range_Doubles out_range;
+
+	/* Initialize fields */
+	out_range.min = arr[range.min];
+	out_range.max = arr[range.min];
+
+	for (size_t i = range.min; i <= range.max; i++) {
+		double elem = arr[i];
+
+		if (elem < out_range.min)
+			out_range.min = elem;
+		if (elem > out_range.max)
+			out_range.max = elem;
+	}
+
+	return out_range;
+}
+
+bool test_get_minmax() {
+	Range_Indices ri;
+	ri.min = 2;
+	ri.max = 6;
+
+	double arr[] = {0.0, 1.1, 2.2, 3.3, 0.4, 5.5, 0.06, 7.7};
+
+	Range_Doubles rd = get_minmax(arr, ri);
+
+	return true;
+}
+// TODO Move process_layer and get_config_values to another file
 
 /* Process one value from the yaml file. If the value is determined to be a keyname, 
  *	this will recurse to assign the next parsed value as its keyvalue.
@@ -380,10 +414,18 @@ int main(int argc, char **argv)
 	//H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
 
-	hid_t atl = H5Fopen(LOCAL_PATH "ATL03_20181017222812_02950102_005_01.h5", H5F_ACC_RDWR, fapl_id);
-	hid_t atl_out = H5Fcreate(LOCAL_PATH "atl_out.h5", H5F_ACC_TRUNC, fcpl_id, fapl_id);
+	char *input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
+	strcpy(input_path, config->input_foldername);
+	strcat(input_path, config->input_filename);
+	hid_t atl = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id);
+
+	char *output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
+	strcpy(output_path, config->output_foldername);
+	strcat(output_path, config->output_filename);
+	hid_t atl_out = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id);
 
 	//attr_iteration_test();
+	//bool out = test_get_minmax();
 	copy_scalar_datasets(atl, atl_out);
 
 	/* Close open objects */
@@ -391,7 +433,10 @@ int main(int argc, char **argv)
 	H5Pclose(fcpl_id);
 	H5Fclose(atl);
 	H5Fclose(atl_out);
-	// TODO free all
+	
+	free(input_path);
+	free(output_path);
+
 	free(config->loglevel);
 	free(config->logfile);
 	free(config->input_foldername);
