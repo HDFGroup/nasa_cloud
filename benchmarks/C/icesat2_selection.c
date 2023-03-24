@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "hdf5.h"
-//#include "rest_vol_public.h"
+
+#include "rest_vol_public.h"
 
 #define SUCCEED 0
 #define FAIL (-1)
@@ -16,7 +17,7 @@
  * and then goto the "done" label, which should appear inside the
  * function. (compatible with v1 and v2 errors)
  */
-#define FUNC_GOTO_ERROR(err_major, err_minor, ret_val, err_msg)                    \
+#define FUNC_GOTO_ERROR(err_msg)                    \
 	fprintf(stderr, "%s\n", err_msg);                                              \
 	fprintf(stderr, "\n");                                                         \
 	exit(1);																	   \
@@ -84,7 +85,7 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	hid_t fin_attr;
 	
 	if (H5I_INVALID_HID == (fin_attr = H5Aopen(fin, attr_name, H5P_DEFAULT))) {
-		FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, NULL, "can't open file attribute in copy callback");
+		FUNC_GOTO_ERROR("can't open file attribute in copy callback");
 	}
 
 	hid_t dtype_id = H5Aget_type(fin_attr);
@@ -105,7 +106,8 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	char *prev_group_name;
 	char *group_name;
 	char *dset_name;
-	char current_dset_path[FILEPATH_BUFFER_SIZE];	
+	char *current_dset_path;
+	char dset_buffer[FILEPATH_BUFFER_SIZE];
 	
 	const char **current_dset = scalar_datasets;
 
@@ -113,6 +115,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	while (*current_dset != 0) {
 		
 		/* Copy scalar dataset paths to stack for strtok */
+		current_dset_path = &(dset_buffer[0]);
 		strncpy(current_dset_path, *current_dset, strlen(*current_dset) + 1);
 
 		PRINT_DEBUG("Copying scalar dset %s\n", current_dset_path);
@@ -120,17 +123,17 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		dset = H5Dopen(fin, current_dset_path, H5P_DEFAULT);
 
 		/* Separate filepath into groups */
-		char *group_name = strtok(current_dset_path, PATH_DELIMITER);
+		char *group_name = strtok_r(current_dset_path, PATH_DELIMITER, &current_dset_path);
 		
 		if (group_name == NULL) {
-			group_name = strtok(NULL, PATH_DELIMITER);
+			group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path);
 		}
 
 		parent_group = fout;
 
 		while(group_name != NULL) {
 			if (strcmp("", group_name) == 0) {
-				group_name = strtok(NULL, PATH_DELIMITER);
+				group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path);
 				continue;
 			}
 
@@ -151,7 +154,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 
 			/* If the end of the path is reached, keep track of dset name */
 			prev_group_name = group_name;
-			if (NULL == (group_name = strtok(NULL, PATH_DELIMITER))) {
+			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path))) {
 				dset_name = prev_group_name;
 			}
 			
@@ -163,7 +166,6 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 																						H5P_DEFAULT, \
 																						H5Dget_create_plist(dset), \
 																						H5Dget_access_plist(dset));
-
 		H5Dclose(copied_scalar_dataset);
 		H5Dclose(dset);
 		++current_dset;
@@ -178,6 +180,21 @@ herr_t copy_root_attrs(hid_t fin, hid_t fout) {
 	return ret_value;
 }
 
+void attr_iteration_test(hid_t fin, hid_t fout) {
+	hid_t null_dstype= H5Screate(H5S_NULL);
+
+	hid_t attr1 = H5Acreate(fin, "attr1", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr2 = H5Acreate(fin, "attr2", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr3 = H5Acreate(fin, "attr3", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+
+	copy_root_attrs(fin, fout);
+	H5Aiterate(fout, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &fout);
+
+	H5Aclose(attr1);
+	H5Aclose(attr2);
+	H5Aclose(attr3);
+}
+
 int main(int argc, char **argv) 
 {
 
@@ -187,30 +204,39 @@ int main(int argc, char **argv)
 		}
 	}
 
+	//yaml_parser_t parser;
+	
 	hid_t fapl_id;
 	hid_t fcpl_id;
 
 	/* Initialize REST VOL connector */
-	//H5rest_init();
+	H5rest_init();
 	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-	//H5Pset_fapl_rest_vol(fapl_id);
+	H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
 
-	hid_t atl = H5Fopen("/home/matthewlarson/Documents/nasa_cloud/data/ATL03_20181017222812_02950102_005_01.h5", H5F_ACC_RDWR, fapl_id);
-	hid_t atl_out = H5Fcreate("/home/matthewlarson/Documents/nasa_cloud/data/atl_out.h5", H5F_ACC_TRUNC, fcpl_id, fapl_id);
+	// local_path = /home/matthewlarson/Documents/nasa_cloud/data/
+	// hsds_path = /home/test_user1/
+	hid_t atl = H5Fopen("/home/test_user1/ATL03_20181017222812_02950102_005_01.h5", H5F_ACC_RDWR, fapl_id);
+	hid_t atl_out = H5Fcreate("/home/test_user1/atl_out.h5", H5F_ACC_TRUNC, fcpl_id, fapl_id);
 	
+	hid_t file1 = H5Fcreate("/home/test_user1/temp1", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t file2 = H5Fcreate("/home/test_user1/temp2", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
+	attr_iteration_test(file1, file2);
 	copy_scalar_datasets(atl, atl_out);
 
 
 	/* Close open objects */
 	// TODO: Error handling
+	H5Fclose(file1);
+	H5Fclose(file2);
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
 	H5Fclose(atl);
-	//H5Fclose(atl_out);
+	H5Fclose(atl_out);
 	
 	/* Terminate the REST VOL connector. */
-	//H5rest_term();
+	H5rest_term();
 	return 0;
 }
