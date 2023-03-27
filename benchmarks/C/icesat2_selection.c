@@ -35,7 +35,7 @@
 
 bool debug = false;
 
-const char *ground_tracks[] = {"gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r", 0};
+char *ground_tracks[] = {"gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r", 0};
 
 const char *scalar_datasets[] = {"/orbit_info/sc_orient", 
 								 "/ancillary_data/start_rgt", 
@@ -249,6 +249,18 @@ Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	return out_range;
 }
 
+bool test_get_minmax() {
+	Range_Indices ri;
+	ri.min = 2;
+	ri.max = 6;
+
+	double arr[] = {0.0, 1.1, 2.2, 3.3, 0.4, 5.5, 0.06, 7.7};
+
+	Range_Doubles rd = get_minmax(arr, ri);
+
+	return true;
+}
+
 /* Return the min/max indices of the given array where its values fall within the given bounds */
 // TODO Make sure real returns use heap memory
 Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], size_t lon_size,
@@ -304,13 +316,13 @@ Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], si
 		Range_Indices *range_high = get_range(lat_arr, lat_size, lon_arr, lon_size, bbox, &range_select_high);
 
 		if (range_low == NULL) {
-			PRINT_DEBUG("Return range high")
+			PRINT_DEBUG("Return range high\n")
 			ret_range->min = range_high->min;
 			ret_range->max = range_high->max;
 			free(range_high);
 			return ret_range;
 		} else if (range_high == NULL) {
-			PRINT_DEBUG("Return range low")
+			PRINT_DEBUG("Return range low\n")
 			ret_range->min = range_low->min;
 			ret_range->max = range_low->max;
 			free(range_low);
@@ -318,7 +330,7 @@ Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], si
 		}
 
 		/* If neither is empty, concatenate the ranges */
-		PRINT_DEBUG("Concatenating ranges")
+		PRINT_DEBUG("Concatenating ranges\n")
 		ret_range->min = range_low->min;
 		ret_range->max = range_high->max;
 
@@ -348,17 +360,101 @@ bool test_get_range() {
 	free(ri);
 }
 
-bool test_get_minmax() {
-	Range_Indices ri;
-	ri.min = 2;
-	ri.max = 6;
+/* Get min/max index for the given lat/lon bounds */
+Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
+	PRINT_DEBUG("get_index_range with ground_track = %s\n", ground_track)
 
-	double arr[] = {0.0, 1.1, 2.2, 3.3, 0.4, 5.5, 0.06, 7.7};
+	hid_t lat_dset = H5I_INVALID_HID;
+	hid_t lon_dset = H5I_INVALID_HID;
 
-	Range_Doubles rd = get_minmax(arr, ri);
+	/* Read data from dsets into arrays */
+	char *lat_dset_name = malloc(strlen(ground_track) + strlen(geolocation_lat) + 1);
+	strncpy(lat_dset_name, ground_track, strlen(ground_track) + 1);
+	strcat(lat_dset_name, geolocation_lat);
 
-	return true;
+	if ((lat_dset = H5Dopen(fin, lat_dset_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to open lat datset")
+	}
+
+	hid_t dspace_id = H5Dget_space(lat_dset);
+	hssize_t num_elems_lat = H5Sget_simple_extent_npoints(dspace_id);
+	PRINT_DEBUG("Number of elements in lat dataset is %zu\n", num_elems_lat)
+	double *lat_arr = malloc(sizeof(double) * num_elems_lat);
+
+	if (H5Dread(lat_dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, lat_arr) < 0) {
+		FUNC_GOTO_ERROR("Failed to read from lat dataset")
+	}
+
+
+	char *lon_dset_name = malloc(strlen(ground_track) + strlen(geolocation_lon) + 1);
+	strncpy(lon_dset_name, ground_track, strlen(ground_track) + 1);
+	strcat(lon_dset_name, geolocation_lon);
+
+	if ((lon_dset = H5Dopen(fin, lon_dset_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to open lon dataset")
+	}
+
+	dspace_id = H5Dget_space(lon_dset);
+	hssize_t num_elems_lon = H5Sget_simple_extent_npoints(dspace_id);
+
+	double *lon_arr = malloc(sizeof(double) * num_elems_lon);
+
+	if (H5Dread(lon_dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, lon_arr) < 0) {
+		FUNC_GOTO_ERROR("Failed to read from lon dataset")
+	}
+
+	Range_Indices *index_range = get_range(lat_arr, num_elems_lat, lon_arr, num_elems_lon, bbox, NULL);
+	
+	if (index_range) {
+		PRINT_DEBUG("get_index_range using idex with min %zu and max %zu\n", index_range->min, index_range->max)
+	}
+
+	H5Dclose(lon_dset);
+	H5Dclose(lat_dset);
+	free(lat_arr);
+	free(lat_dset_name);
+	free(lon_dset_name);
+	free(lon_arr);
+
+	return index_range;
 }
+
+void test_get_index_range(hid_t fin) {
+	/* Entirely within */
+	BBox bbox;
+	bbox.min_lat = -115;
+	bbox.max_lat = 60;
+	bbox.min_lon = -115;
+	bbox.max_lon = 70;
+
+	Range_Indices *ri = get_index_range(fin, ground_tracks[0], &bbox);
+	free(ri);
+
+	/* Entirely outside */
+	bbox.min_lat = 0;
+	bbox.max_lat = 0;
+	bbox.min_lon = 0;
+	bbox.max_lon = 0;
+
+	ri = get_index_range(fin, ground_tracks[0], &bbox);
+
+	if (ri) {
+		free(ri);
+	}
+
+	/* Partially within bbox */
+	bbox.min_lat = -55;
+	bbox.max_lat = 40;
+	bbox.min_lon = -115;
+	bbox.max_lon = 70;
+
+	ri = get_index_range(fin, ground_tracks[0], &bbox);
+
+	if (ri) {
+		free(ri);
+	}
+}
+
 // TODO Move process_layer and get_config_values to another file
 
 /* Process one value from the yaml file. If the value is determined to be a keyname, 
@@ -526,7 +622,9 @@ int main(int argc, char **argv)
 
 	//attr_iteration_test();
 	//bool out = test_get_minmax();
-	test_get_range();
+	//test_get_range();
+	test_get_index_range(atl);
+
 	copy_scalar_datasets(atl, atl_out);
 
 	/* Close open objects */
