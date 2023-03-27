@@ -24,6 +24,7 @@
 	fprintf(stderr, "\n");                                                         \
 	exit(1);																	   \
 
+// TODO Maybe replace this with something more lightweight
 /* Print if program is run with debug flag */
 #define PRINT_DEBUG(...)                                                                   \
                 if (debug) { 													       \
@@ -236,7 +237,7 @@ Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	out_range.min = arr[range.min];
 	out_range.max = arr[range.min];
 
-	for (size_t i = range.min; i <= range.max; i++) {
+	for (size_t i = range.min; i < range.max; i++) {
 		double elem = arr[i];
 
 		if (elem < out_range.min)
@@ -246,6 +247,105 @@ Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	}
 
 	return out_range;
+}
+
+/* Return the min/max indices of the given array where its values fall within the given bounds */
+// TODO Make sure real returns use heap memory
+Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], size_t lon_size,
+ 			   BBox *bbox, Range_Indices *range) 
+{
+	Range_Indices *ret_range = malloc(sizeof(*range));
+	ret_range->min = 0;
+	ret_range->max = 0;
+
+	Range_Indices default_range;
+	default_range.min = 0;
+	default_range.max = lat_size;
+
+	if (lat_size != lon_size) {
+		FUNC_GOTO_ERROR("expected lat and lon arrays to have same shape")
+	}
+
+	if (range == NULL) {
+		range = &default_range;
+	}
+
+	PRINT_DEBUG("get_range range has min %zu and max %zu\n", range->min, range->max)
+
+	Range_Doubles lat_range = get_minmax(lat_arr, *range);
+	Range_Doubles lon_range = get_minmax(lon_arr, *range);
+
+	/* If entirely outside bbox, return NULL */
+	if (lat_range.min > bbox->max_lat ||
+		lat_range.max < bbox->min_lat ||
+		lon_range.min > bbox->max_lon ||
+		lon_range.max < bbox->min_lon) {
+			PRINT_DEBUG("%s\n", "Entirely outside bbox")
+			free(ret_range);
+			ret_range = NULL;
+	} else if (lat_range.min >= bbox->min_lat &&
+			   lat_range.max <= bbox->max_lat &&
+			   lon_range.min >= bbox->min_lon &&
+			   lon_range.max <= bbox->max_lon) {
+			PRINT_DEBUG("%s\n", "Entirely within bbox")
+			memcpy(ret_range, range, sizeof(*range));
+	} else {
+		/* If entirely in bbox, return current range */
+		size_t middle_index = (size_t) ((range->min + range->max) / 2);
+
+		Range_Indices range_select_low;
+		range_select_low.min = range->min;
+		range_select_low.max = middle_index;
+		Range_Indices *range_low = get_range(lat_arr, lat_size, lon_arr, lon_size, bbox, &range_select_low);
+
+		Range_Indices range_select_high;
+		range_select_high.min = middle_index;
+		range_select_high.max = range->max;
+		Range_Indices *range_high = get_range(lat_arr, lat_size, lon_arr, lon_size, bbox, &range_select_high);
+
+		if (range_low == NULL) {
+			PRINT_DEBUG("Return range high")
+			ret_range->min = range_high->min;
+			ret_range->max = range_high->max;
+			free(range_high);
+			return ret_range;
+		} else if (range_high == NULL) {
+			PRINT_DEBUG("Return range low")
+			ret_range->min = range_low->min;
+			ret_range->max = range_low->max;
+			free(range_low);
+			return ret_range;
+		}
+
+		/* If neither is empty, concatenate the ranges */
+		PRINT_DEBUG("Concatenating ranges")
+		ret_range->min = range_low->min;
+		ret_range->max = range_high->max;
+
+		free(range_low);
+		free(range_high);
+	}
+	
+	return ret_range;
+}
+
+bool test_get_range() {
+	double lat_arr[] = {0.0, 1.1, 2.2, 3.3};
+	double lon_arr[] = {0.0, 1.1, 2.2, 3.3};
+	BBox bbox;
+	BBox *bbox_ptr = &bbox;
+	bbox.max_lat = 2.0;
+	bbox.min_lat = 0.0;
+	bbox.max_lon = 3.0;
+	bbox.min_lon = 1.0;
+
+	Range_Indices *range = NULL;
+
+	size_t lat_size = sizeof(lat_arr) / sizeof(lat_arr[0]);
+	size_t lon_size = sizeof(lon_arr) / sizeof(lon_arr[0]);
+
+	Range_Indices *ri = get_range(lat_arr, lat_size, lon_arr, lon_size, bbox_ptr, range);
+	free(ri);
 }
 
 bool test_get_minmax() {
@@ -426,6 +526,7 @@ int main(int argc, char **argv)
 
 	//attr_iteration_test();
 	//bool out = test_get_minmax();
+	test_get_range();
 	copy_scalar_datasets(atl, atl_out);
 
 	/* Close open objects */
