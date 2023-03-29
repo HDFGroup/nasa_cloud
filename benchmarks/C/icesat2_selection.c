@@ -68,8 +68,8 @@ typedef struct BBox {
 } BBox;
 
 typedef struct Range_Indices {
-	size_t min;
-	size_t max;
+	unsigned long long min;
+	unsigned long long max;
 } Range_Indices;
 
 typedef struct Range_Doubles {
@@ -297,7 +297,7 @@ Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], si
 		range = &default_range;
 	}
 
-	PRINT_DEBUG("get_range range has min %zu and max %zu\n", range->min, range->max)
+	PRINT_DEBUG("get_range range has min %llu and max %llu\n", range->min, range->max)
 
 	Range_Doubles lat_range = get_minmax(lat_arr, *range);
 	Range_Doubles lon_range = get_minmax(lon_arr, *range);
@@ -421,7 +421,7 @@ Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
 	Range_Indices *index_range = get_range(lat_arr, num_elems_lat, lon_arr, num_elems_lon, bbox, NULL);
 	
 	if (index_range) {
-		PRINT_DEBUG("get_index_range using idex with min %zu and max %zu\n", index_range->min, index_range->max)
+		PRINT_DEBUG("get_index_range using idex with min %llu and max %llu\n", index_range->min, index_range->max)
 	}
 
 	H5Dclose(lon_dset);
@@ -580,9 +580,71 @@ void test_copy_dataset_range(hid_t fin, hid_t fout) {
 	ri.min = 0;
 
 	copy_dataset_range(fin, fout, h5path, &ri);
-
+	return;
 }
 
+Range_Indices* get_photon_count_range(hid_t fin, char *h5path, Range_Indices *range) {
+	Range_Indices *ret_range = malloc(sizeof(Range_Indices));
+	hid_t dset;
+	hid_t fspace;
+	int *data;
+	unsigned long long sum_base = 0;
+	unsigned long long sum_inc = 0;
+	
+	if (H5I_INVALID_HID == (dset = H5Dopen(fin, h5path, H5P_DEFAULT))) {
+		FUNC_GOTO_ERROR("Failed to open dset in get_photon_count_range")
+	}
+
+	/* Create hyperslab selection to read up to range max */
+	fspace = H5Dget_space(dset);
+	hid_t photon_num_elems = H5Sget_simple_extent_npoints(fspace);
+
+	
+
+	if (0 > H5Sselect_hyperslab(fspace, H5S_SELECT_SET, (hsize_t[]){0},
+														(hsize_t[]){1},
+														(hsize_t[]){range->max},
+														(hsize_t[]){1})) {
+		FUNC_GOTO_ERROR("Failed to select hyperslab in get_photon_count_range")
+	}
+
+	hid_t dtype = H5Dget_type(dset);
+	hid_t native = H5Tget_native_type(dtype, H5T_DIR_DEFAULT);
+
+	data = calloc(range->max, sizeof(int));
+
+	if (0 > H5Dread(dset, native, H5S_ALL, fspace, H5P_DEFAULT, data)) {
+		FUNC_GOTO_ERROR("Failed to read from data in get_photon_count_range")
+	}
+
+	for (size_t i = 0; i < range->min; i++) {
+		sum_base += data[i];
+	}
+	
+	for (size_t j = range->min; j < range->max; j++) {
+		sum_inc += data[j];
+	}
+
+	ret_range->min = sum_base;
+	ret_range->max = sum_base + sum_inc;
+
+	PRINT_DEBUG("Got photon count range %s for (%llu, %llu) of (%llu, %llu)\n", h5path, range->min, range->max, ret_range->min, ret_range->max)
+	
+	free(data);
+	H5Dclose(dset);
+	return ret_range; 
+}
+
+void test_get_photon_count_range(hid_t fin) {
+	char *path = "gt1l/geolocation/segment_ph_cnt";
+	Range_Indices range;
+	range.max = 6000;
+	range.min = 1000;
+
+	Range_Indices *ret = get_photon_count_range(fin, path, &range);
+	free(ret);
+	return;
+}
 // TODO Move process_layer and get_config_values to another file
 
 /* Process one value from the yaml file. If the value is determined to be a keyname, 
@@ -813,6 +875,8 @@ int main(int argc, char **argv)
 	copy_scalar_datasets(atl, atl_out);
 
 	test_copy_dataset_range(atl, atl_out);
+
+	test_get_photon_count_range(atl);
 
 	/* Close open objects */
 	H5Pclose(fapl_id);
