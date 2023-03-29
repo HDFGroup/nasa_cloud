@@ -34,6 +34,7 @@
 #define CONFIG_FILENAME "../config/config.yml"
 
 bool debug = false;
+bool check_output = false;
 
 char *ground_tracks[] = {"gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r", 0};
 
@@ -111,20 +112,40 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	herr_t ret_value = SUCCEED;
 
 	hid_t fout = *((hid_t*) fout_data);
-	hid_t fin_aapl_id;
-	hid_t fin_attr;
+	hid_t fin_aapl_id = H5I_INVALID_HID;
+	hid_t fin_attr = H5I_INVALID_HID;
 
-	void *attr_data;
+	hid_t acpl_id   = H5I_INVALID_HID;
+	hid_t dtype_id  = H5I_INVALID_HID;
+	hid_t dstype_id = H5I_INVALID_HID;
+	hid_t fout_attr = H5I_INVALID_HID;
+	hid_t attr_type = H5I_INVALID_HID;
+
+	void *attr_data = NULL;
 	
-	if (H5I_INVALID_HID == (fin_attr = H5Aopen(fin, attr_name, H5P_DEFAULT))) {
+	if ((fin_attr = H5Aopen(fin, attr_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("can't open file attribute in copy callback");
 	}
 
-	hid_t dtype_id = H5Aget_type(fin_attr);
-	hid_t dstype_id = H5Aget_space(fin_attr);
+	if ((dtype_id = H5Aget_type(fin_attr)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get datatype of attribute")
+	}
 
-	hid_t fout_attr = H5Acreate(fout, attr_name, dtype_id, dstype_id, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t attr_type = H5Aget_type(fin_attr);
+	if ((dstype_id = H5Aget_space(fin_attr)) < 0) {
+		FUNC_GOTO_ERROR("Failed to get dataspace of attribute")
+	}
+
+	if ((acpl_id = H5Aget_create_plist(fin_attr)) < 0) {
+		FUNC_GOTO_ERROR("Failed to get acpl")
+	}
+
+	if ((fout_attr = H5Acreate(fout, attr_name, dtype_id, dstype_id, acpl_id, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to create attribute in output file")
+	}
+	
+	if ((attr_type = H5Aget_type(fin_attr)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get type of input file attribute")
+	}
 
 	attr_data = malloc(H5Tget_size(attr_type));
 
@@ -155,7 +176,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
 	const char **current_dset = scalar_datasets;
 
-	double *data = NULL;
+	void *data = NULL;
 
 	/* For each dataset in scalar_datasets */
 	while (*current_dset != 0) {
@@ -214,13 +235,13 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		
 		
 		size_t num_elems = H5Sget_simple_extent_npoints(dstype);
-		data = malloc(num_elems * sizeof(double));
+		data = malloc(num_elems * H5Tget_size(dtype));
 
-		if (H5Dread(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+		if (H5Dread(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 			FUNC_GOTO_ERROR("Failed to read dataset while copying scalar")
 		}
 
-		if (H5Dwrite(copied_scalar_dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+		if (H5Dwrite(copied_scalar_dataset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 			FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
 		}
 
@@ -857,52 +878,24 @@ ConfigValues* get_config_values(char *yaml_config_filename, ConfigValues *config
 	return config;
 }
 
-void test_getname(ConfigValues *config) {
-	char *filename = "/home/test_user1/file_name_test.h5";
-	hid_t fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-	hid_t fcpl_id = H5Pcreate(H5P_FILE_CREATE);
-	H5Fcreate(filename, H5F_ACC_TRUNC, fcpl_id, fapl_id);
-	hid_t file = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
-	char name_buf[FILEPATH_BUFFER_SIZE];
+herr_t show_data_callback(hid_t obj, const char *name, const H5O_info2_t *info, void *op_data) {
 
+	hid_t this_obj = H5I_INVALID_HID;
 
-	// File
-	H5Fget_name(file, name_buf, FILEPATH_BUFFER_SIZE);
-	PRINT_DEBUG("Name of given file is %s\n", name_buf)
-	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+	if ((this_obj = H5Oopen(obj, name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to open object in callback")
+	}
 
-	// Group
-	hid_t group = H5Gcreate(file, "group_name_test", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	H5Fget_name(group, name_buf, FILEPATH_BUFFER_SIZE);
-	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
-	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+	H5Oclose(this_obj);
+	return 0;
+}
+void show_file_info(hid_t file) {
+	// Iterate over all groups, attributes, datasets, and show their size
+	if (H5Ovisit(file, H5_INDEX_NAME, H5_ITER_INC, show_data_callback, NULL, 0) < 0) {
+		FUNC_GOTO_ERROR("Failed to visit objects")
+	}
 
-	// Dataset
-	hid_t dstype = H5Screate_simple(1, (hsize_t[]){10}, NULL);
-	hid_t dset = H5Dcreate(file, "dset_name_test", H5T_NATIVE_INT, dstype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	H5Fget_name(dset, name_buf, FILEPATH_BUFFER_SIZE);
-	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
-	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
-
-	// Attribute
-	hid_t null_dstype= H5Screate(H5S_NULL);
-	hid_t attr1 = H5Acreate(file, "attr_name_test", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-	H5Fget_name(attr1, name_buf, FILEPATH_BUFFER_SIZE);
-	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
-	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
-
-	// Named Datatype
-	hid_t named_dtype = H5Tcreate(H5T_STRING, 32);
-	H5Tcommit(file, "named_dtype_name_test", named_dtype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	H5Fget_name(named_dtype, name_buf, FILEPATH_BUFFER_SIZE);
-	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
-	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
-
-	H5Tclose(named_dtype);
-	H5Pclose(fapl_id);
-	H5Pclose(fcpl_id);
-	H5Gclose(group);
-	H5Fclose(file);
+	
 }
 
 int main(int argc, char **argv) 
@@ -911,6 +904,10 @@ int main(int argc, char **argv)
 	for (size_t optind = 1; optind < argc; optind++) {
 		if (strcmp(argv[optind], "-debug") == 0) {
 			debug = true;
+		}
+
+		if (strcmp(argv[optind], "-checkoutput") == 0) {
+			check_output = true;
 		}
 	}
 
@@ -934,6 +931,22 @@ int main(int argc, char **argv)
 	char *output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
+
+	if (check_output) {
+		htri_t acc;
+		if (0 > (acc = H5Fis_accessible(output_path, fapl_id))) {
+			FUNC_GOTO_ERROR("Could not check if output is accessible\n")
+		} else if (acc == 0) {
+			PRINT_DEBUG("Output is inaccessible. Proceeding with regular behavior...\n")
+		} else {
+			hid_t out = H5Fopen(output_path, H5F_ACC_RDONLY, fapl_id);
+			PRINT_DEBUG("Showing file info\n")
+			show_file_info(out);
+			H5Fclose(out);
+			exit(0);
+		}
+	}
+
 	hid_t fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id);
 
 	//attr_iteration_test();
