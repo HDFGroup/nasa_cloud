@@ -113,6 +113,8 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	hid_t fout = *((hid_t*) fout_data);
 	hid_t fin_aapl_id;
 	hid_t fin_attr;
+
+	void *attr_data;
 	
 	if (H5I_INVALID_HID == (fin_attr = H5Aopen(fin, attr_name, H5P_DEFAULT))) {
 		FUNC_GOTO_ERROR("can't open file attribute in copy callback");
@@ -121,8 +123,21 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	hid_t dtype_id = H5Aget_type(fin_attr);
 	hid_t dstype_id = H5Aget_space(fin_attr);
 
-	H5Acreate(fout, attr_name, dtype_id, dstype_id, H5P_DEFAULT, H5P_DEFAULT);
-	H5Aclose(fin_attr);
+	hid_t fout_attr = H5Acreate(fout, attr_name, dtype_id, dstype_id, H5P_DEFAULT, H5P_DEFAULT);
+	hid_t attr_type = H5Aget_type(fin_attr);
+
+	attr_data = malloc(H5Tget_size(attr_type));
+
+	if (0 > H5Aread(fin_attr, attr_type, attr_data)) {
+		FUNC_GOTO_ERROR("Failed to read from attribute")
+	}
+
+	if (0 > H5Awrite(fout_attr, attr_type, attr_data)) {
+		FUNC_GOTO_ERROR("Failed to write to copied attribute")
+	}
+
+	free(attr_data);
+	H5Aclose(fout_attr);
 
 	return ret_value;
 }
@@ -645,6 +660,37 @@ void test_get_photon_count_range(hid_t fin) {
 	free(ret);
 	return;
 }
+/*
+
+void save_georegion(hid_t fout, BBox *bbox) {
+	// TBD: Use CF convention?
+
+	// open, read, close
+	
+	hid_t attr = H5I_INVALID_HID;
+	double attr_buf = 0;
+
+	H5Aiterate(fout, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &fout);
+	if (0 > (attr = H5Aopen_name(fout, "max_lat"))) {
+		FUNC_GOTO_ERROR("Failed to open attribute")
+	}
+
+	if (0 > H5Aread(attr, H5T_NATIVE_DOUBLE, &attr_buf)) {
+		FUNC_GOTO_ERROR("Failed to read from attribute")
+	}
+
+	H5Aclose(attr);
+
+}
+
+void test_save_georegion(hid_t file) {
+	BBox bbox;
+
+	save_georegion(file, &bbox);
+	
+}
+*/
+
 // TODO Move process_layer and get_config_values to another file
 
 /* Process one value from the yaml file. If the value is determined to be a keyname, 
@@ -845,44 +891,76 @@ int main(int argc, char **argv)
 	//H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
 
-
 	ConfigValues *config = malloc(sizeof(*config));
 	config = get_config_values(CONFIG_FILENAME, config);
-
-	//test_getname(config);
-
-	
-
-
 
 	char *input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
-	hid_t atl = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id);
+	hid_t fin = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id);
 
 	char *output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
-	hid_t atl_out = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id);
+	hid_t fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id);
 
 	//attr_iteration_test();
 	//bool out = test_get_minmax();
 	//test_get_range();
+	//test_get_index_range(fin);
+	//copy_scalar_datasets(fin, fout);
+	//test_copy_dataset_range(fin, fout);
+	//test_get_photon_count_range(fin);
+	// TBD
+	//test_save_georegion(fin);
+
+	PRINT_DEBUG("Input filepath = %s%s\n", config->input_foldername, config->input_filename)
+	PRINT_DEBUG("Output filepath = %s%s\n", config->output_foldername, config->output_filename)
+
+	double min_lon = config->min_lon;
+
+	if (min_lon < -180.0 || min_lon > 180.0) {
+		PRINT_DEBUG("Invalid min_lon value: %lf\n", min_lon)
+		exit(1);
+	}
+
+	double max_lon = config->max_lon;
+
+	if (max_lon < -180.0 || max_lon > 180.0 || max_lon <= min_lon) {
+		PRINT_DEBUG("Invalid max_lon value: %lf\n", max_lon)
+		exit(1);
+	}
+
+	double min_lat = config->min_lat;
+
+	if (min_lat < -90.0 || min_lat > 90.0) {
+		PRINT_DEBUG("Invalid min_lat value: %lf\n", min_lat)
+		exit(1);
+	}
+
+	double max_lat = config->max_lat;
+
+	if (max_lat < -90.0 || max_lat > 90.0 || max_lat <= min_lat) {
+		PRINT_DEBUG("Invalid max_lat error: %lf\n", max_lat)
+		exit(1);
+	}
+
+	BBox bbox;
+	bbox.min_lon = min_lon;
+	bbox.max_lon = max_lon;
+	bbox.min_lat = min_lat;
+	bbox.max_lat = max_lat;
+
+	PRINT_DEBUG("Lat Range: %lf - %lf\n", bbox.min_lat, bbox.max_lat)
+	PRINT_DEBUG("Lon Range: %lf - %lf\n", bbox.min_lon, bbox.max_lon)
+
+	copy_root_attrs(fin, fout);
 	
-	
-	//test_get_index_range(atl);
-
-	copy_scalar_datasets(atl, atl_out);
-
-	test_copy_dataset_range(atl, atl_out);
-
-	test_get_photon_count_range(atl);
-
 	/* Close open objects */
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
-	H5Fclose(atl);
-	H5Fclose(atl_out);
+	H5Fclose(fin);
+	H5Fclose(fout);
 	
 	free(input_path);
 	free(output_path);
