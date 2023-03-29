@@ -5,7 +5,7 @@
 
 #include "hdf5.h"
 
-#include "rest_vol_public.h"
+//#include "rest_vol_public.h"
 
 #define SUCCEED 0
 #define FAIL (-1)
@@ -136,8 +136,8 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	char *prev_group_name;
 	char *group_name;
 	char *dset_name;
-	char *current_dset_path;
-	char dset_buffer[FILEPATH_BUFFER_SIZE];
+	char *dset_path;
+	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
 	
 	const char **current_dset = scalar_datasets;
 
@@ -145,25 +145,25 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	while (*current_dset != 0) {
 		
 		/* Copy scalar dataset paths to stack for strtok */
-		current_dset_path = &(dset_buffer[0]);
-		strncpy(current_dset_path, *current_dset, strlen(*current_dset) + 1);
+		dset_path = &(dset_path_buffer[0]);
+		strncpy(dset_path, *current_dset, strlen(*current_dset) + 1);
 
-		PRINT_DEBUG("Copying scalar dset %s\n", current_dset_path);
+		PRINT_DEBUG("Copying scalar dset %s\n", dset_path);
 
-		dset = H5Dopen(fin, current_dset_path, H5P_DEFAULT);
+		dset = H5Dopen(fin, dset_path, H5P_DEFAULT);
 
 		/* Separate filepath into groups */
-		char *group_name = strtok_r(current_dset_path, PATH_DELIMITER, &current_dset_path);
+		group_name = strtok_r(dset_path, PATH_DELIMITER, &dset_path);
 		
 		if (group_name == NULL) {
-			group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path);
+			group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
 		}
 
 		parent_group = fout;
 
 		while(group_name != NULL) {
 			if (strcmp("", group_name) == 0) {
-				group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path);
+				group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
 				continue;
 			}
 
@@ -184,7 +184,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 
 			/* If the end of the path is reached, keep track of dset name */
 			prev_group_name = group_name;
-			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &current_dset_path))) {
+			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path))) {
 				dset_name = prev_group_name;
 			}
 			
@@ -192,12 +192,14 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 
 		hid_t dtype = H5Dget_type(dset);
 		hid_t dstype = H5Dget_space(dset);
-		hid_t copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, 
-																						H5P_DEFAULT, \
-																						H5Dget_create_plist(dset), \
-																						H5Dget_access_plist(dset));
+		hid_t dcpl = H5Dget_create_plist(dset);
+		hid_t dapl = H5Dget_access_plist(dset);
+		hid_t copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl);
+		// TODO Write data to copied scalar dataset
 		H5Dclose(copied_scalar_dataset);
 		H5Dclose(dset);
+		H5Pclose(dcpl);
+		H5Pclose(dapl);
 		++current_dset;
 	}
 }
@@ -261,8 +263,7 @@ bool test_get_minmax() {
 	return true;
 }
 
-/* Return the min/max indices of the given array where its values fall within the given bounds */
-// TODO Make sure real returns use heap memory
+/* Return the lowest and highest indices of the given array where the lat/lon values fall within the given bounding box */
 Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], size_t lon_size,
  			   BBox *bbox, Range_Indices *range) 
 {
@@ -455,6 +456,119 @@ void test_get_index_range(hid_t fin) {
 	}
 }
 
+/* Copy given index range from source dataset to destination dataset */
+void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *index_range) {
+	hid_t source_dset = H5I_INVALID_HID;
+	hid_t child_group = H5I_INVALID_HID;
+	hid_t parent_group = H5I_INVALID_HID;
+	hid_t copy_dset = H5I_INVALID_HID;
+
+	char *prev_group_name;
+	char *group_name;
+	char *dset_name;
+	char *dset_path;
+	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
+
+	double* data;
+
+	size_t extent = index_range->max - index_range->min;
+
+	PRINT_DEBUG("Creating dataset %s with extent %lu\n", h5path, extent)
+
+	/* Copy scalar dataset paths to stack for strtok */
+	dset_path = &(dset_path_buffer[0]);
+	strncpy(dset_path, h5path, strlen(h5path) + 1);
+
+	parent_group = fout;
+
+	/* Separate filepath into groups */
+	group_name = strtok_r(dset_path, PATH_DELIMITER, &dset_path);
+
+	while(group_name != NULL) {
+			if (strcmp("", group_name) == 0) {
+				group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
+				continue;
+			}
+
+			H5E_BEGIN_TRY {
+				child_group = H5Gopen(parent_group, group_name, H5P_DEFAULT);
+			} H5E_END_TRY
+
+			if (H5I_INVALID_HID == child_group) {
+				child_group = H5Gcreate(parent_group, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+			}
+
+			// Only close intermediate groups that were just created, not the file itself
+			if (parent_group != fout) {
+				H5Gclose(parent_group);
+			}
+			
+			parent_group = child_group;
+
+			// If the end of the path is reached, keep track of dset name
+			prev_group_name = group_name;
+			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path))) {
+				dset_name = prev_group_name;
+			}
+
+			if (group_name) 
+				PRINT_DEBUG("New group name = %s\n", group_name)
+	}
+
+	/* Copy the data in the source dataset to a new dataset*/
+
+	/* Access data from old dset */
+	if ((source_dset = H5Dopen(fin, h5path, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to open source dataset")
+	}
+
+	/* Create new dset */
+	hid_t dtype = H5Dget_type(source_dset);
+	hid_t fspace = H5Screate_simple(1, (hsize_t[]){extent}, NULL);
+
+	if (fspace == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Unable to create dstype")
+	}
+
+	hid_t dcpl = H5Dget_create_plist(source_dset);
+	hid_t dapl = H5Dget_access_plist(source_dset);
+	copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl);
+
+	/* Create selection corresponding to range */
+	if (0 > H5Sselect_hyperslab(fspace, H5S_SELECT_SET, (hsize_t[]){index_range->min},
+														(hsize_t[]){1},
+														(hsize_t[]){extent},
+														(hsize_t[]){1})) {
+		FUNC_GOTO_ERROR("Failed to select hyperslab")
+	}
+
+	data = malloc(extent * sizeof(double));
+
+	/* Read and copy selected data */
+	if (H5Dread(source_dset, H5T_NATIVE_DOUBLE, H5S_ALL, fspace, H5P_DEFAULT, data) < 0) {
+		FUNC_GOTO_ERROR("Failed to read from dset with hyperslab selection")
+	}
+
+	if (H5Dwrite(copy_dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+		FUNC_GOTO_ERROR("Failed to write data when copying range")
+	}
+
+	free(data);
+	H5Dclose(copy_dset);
+	H5Pclose(dcpl);
+	H5Pclose(dapl);
+}
+
+void test_copy_dataset_range(hid_t fin, hid_t fout) {
+	char *h5path = "gt1r/geolocation/reference_photon_lat";
+	Range_Indices ri;
+	ri.max = 25000;
+	ri.min = 0;
+
+	copy_dataset_range(fin, fout, h5path, &ri);
+
+}
+
 // TODO Move process_layer and get_config_values to another file
 
 /* Process one value from the yaml file. If the value is determined to be a keyname, 
@@ -589,6 +703,54 @@ ConfigValues* get_config_values(char *yaml_config_filename, ConfigValues *config
 	return config;
 }
 
+void test_getname(ConfigValues *config) {
+	char *filename = "/home/test_user1/file_name_test.h5";
+	hid_t fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+	hid_t fcpl_id = H5Pcreate(H5P_FILE_CREATE);
+	H5Fcreate(filename, H5F_ACC_TRUNC, fcpl_id, fapl_id);
+	hid_t file = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
+	char name_buf[FILEPATH_BUFFER_SIZE];
+
+
+	// File
+	H5Fget_name(file, name_buf, FILEPATH_BUFFER_SIZE);
+	PRINT_DEBUG("Name of given file is %s\n", name_buf)
+	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+
+	// Group
+	hid_t group = H5Gcreate(file, "group_name_test", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	H5Fget_name(group, name_buf, FILEPATH_BUFFER_SIZE);
+	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
+	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+
+	// Dataset
+	hid_t dstype = H5Screate_simple(1, (hsize_t[]){10}, NULL);
+	hid_t dset = H5Dcreate(file, "dset_name_test", H5T_NATIVE_INT, dstype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	H5Fget_name(dset, name_buf, FILEPATH_BUFFER_SIZE);
+	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
+	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+
+	// Attribute
+	hid_t null_dstype= H5Screate(H5S_NULL);
+	hid_t attr1 = H5Acreate(file, "attr_name_test", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
+	H5Fget_name(attr1, name_buf, FILEPATH_BUFFER_SIZE);
+	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
+	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+
+	// Named Datatype
+	hid_t named_dtype = H5Tcreate(H5T_STRING, 32);
+	H5Tcommit(file, "named_dtype_name_test", named_dtype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	H5Fget_name(named_dtype, name_buf, FILEPATH_BUFFER_SIZE);
+	PRINT_DEBUG("Name of file containing group is %s\n", name_buf)
+	memset(name_buf, 0, FILEPATH_BUFFER_SIZE);
+
+	H5Tclose(named_dtype);
+	H5Pclose(fapl_id);
+	H5Pclose(fcpl_id);
+	H5Gclose(group);
+	H5Fclose(file);
+}
+
 int main(int argc, char **argv) 
 {
 
@@ -598,9 +760,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	ConfigValues *config = malloc(sizeof(*config));
-	config = get_config_values(CONFIG_FILENAME, config);
-
 	hid_t fapl_id;
 	hid_t fcpl_id;
 
@@ -609,6 +768,16 @@ int main(int argc, char **argv)
 	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
 	//H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
+
+
+	ConfigValues *config = malloc(sizeof(*config));
+	config = get_config_values(CONFIG_FILENAME, config);
+
+	//test_getname(config);
+
+	
+
+
 
 	char *input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
 	strcpy(input_path, config->input_foldername);
@@ -623,9 +792,13 @@ int main(int argc, char **argv)
 	//attr_iteration_test();
 	//bool out = test_get_minmax();
 	//test_get_range();
-	test_get_index_range(atl);
+	
+	
+	//test_get_index_range(atl);
 
 	copy_scalar_datasets(atl, atl_out);
+
+	test_copy_dataset_range(atl, atl_out);
 
 	/* Close open objects */
 	H5Pclose(fapl_id);
