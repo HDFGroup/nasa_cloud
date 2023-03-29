@@ -138,8 +138,9 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	char *dset_name;
 	char *dset_path;
 	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
-	
 	const char **current_dset = scalar_datasets;
+
+	double *data = NULL;
 
 	/* For each dataset in scalar_datasets */
 	while (*current_dset != 0) {
@@ -195,7 +196,20 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		hid_t dcpl = H5Dget_create_plist(dset);
 		hid_t dapl = H5Dget_access_plist(dset);
 		hid_t copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl);
-		// TODO Write data to copied scalar dataset
+		
+		
+		size_t num_elems = H5Sget_simple_extent_npoints(dstype);
+		data = malloc(num_elems * sizeof(double));
+
+		if (H5Dread(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+			FUNC_GOTO_ERROR("Failed to read dataset while copying scalar")
+		}
+
+		if (H5Dwrite(copied_scalar_dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+			FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
+		}
+
+		free(data);
 		H5Dclose(copied_scalar_dataset);
 		H5Dclose(dset);
 		H5Pclose(dcpl);
