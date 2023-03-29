@@ -47,7 +47,7 @@ char *reference_datasets[] = {"geolocation/reference_photon_lat",
 									"geolocation/segment_ph_cnt",
 									0};
 
-const char *ph_count_datasets[] = {
+char *ph_count_datasets[] = {
 								"heights/dist_ph_along",
 								"heights/h_ph",
 								"heights/signal_conf_ph",
@@ -498,7 +498,7 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	char *dset_path;
 	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
 
-	double* data;
+	void* data;
 
 	size_t extent = index_range->max - index_range->min;
 
@@ -566,7 +566,7 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 
 	dims[0] = extent;
 
-	hid_t fspace = H5Screate_simple(1, dims, NULL);
+	hid_t fspace = H5Screate_simple(ndims, dims, NULL);
 
 	if (fspace == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Unable to create dstype")
@@ -590,10 +590,16 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	
 	copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl);
 
-	data = malloc(extent * sizeof(double));
+	size_t total_num_elems = 1;
+
+	for (size_t i = 0; i < ndims; i++) {
+		total_num_elems *= dims[i];
+	}
+
+	data = malloc(total_num_elems * H5Tget_size(H5Dget_type(source_dset)));
 
 	/* Read and copy selected data */
-	if (H5Dread(source_dset, H5T_NATIVE_DOUBLE, H5S_ALL, fspace, H5P_DEFAULT, data) < 0) {
+	if (H5Dread(source_dset, H5Dget_type(source_dset), H5S_ALL, fspace, H5P_DEFAULT, data) < 0) {
 		FUNC_GOTO_ERROR("Failed to read from dset with hyperslab selection")
 	}
 
@@ -603,7 +609,7 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 
 	
 
-	if (H5Dwrite(copy_dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+	if (H5Dwrite(copy_dset, H5Dget_type(source_dset), H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 		FUNC_GOTO_ERROR("Failed to write data when copying range")
 	}
 
@@ -986,6 +992,7 @@ int main(int argc, char **argv)
 	char **current_ground_track = ground_tracks;
 
 	while(*current_ground_track != 0) {
+		char *h5path;
 		hid_t attr_id;
 		hid_t group = H5Gcreate(fout, *current_ground_track, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 		Range_Indices *index_range = get_index_range(fin, *current_ground_track, &bbox);
@@ -1043,7 +1050,7 @@ int main(int argc, char **argv)
 
 		while(*current_ref_path != 0) {
 			/* Add slash between path names */
-			char *h5path = malloc(strlen(*current_ground_track) + strlen(*current_ref_path) + 2);
+			h5path = malloc(strlen(*current_ground_track) + strlen(*current_ref_path) + 2);
 			strncpy(h5path, *current_ground_track, strlen(*current_ground_track) + 1);
 			h5path[strlen(*current_ground_track)] = '/';
 			h5path[strlen(*current_ground_track) + 1] = '\0';
@@ -1054,7 +1061,36 @@ int main(int argc, char **argv)
 			free(h5path);
 			current_ref_path++;
 		}
+
+		/* Sum up photon counts for later indexing */
+		char *geoloc = "/geolocation/segment_ph_cnt";
+		h5path = malloc(strlen(*current_ground_track) + strlen(geoloc) + 1);
+		strncpy(h5path, *current_ground_track, strlen(*current_ground_track) + 1);
+		strcat(h5path, geoloc);
+
+		Range_Indices *count_range = get_photon_count_range(fin, h5path, index_range);
+
+		free(h5path);
 		
+		PRINT_DEBUG("Photon count range: (%zu, %zu)\n", count_range->min, count_range->max)
+
+		current_ref_path = ph_count_datasets;
+
+		while(*current_ref_path != 0) {
+			h5path = malloc(strlen(*current_ground_track) + strlen(*current_ref_path) + 2);
+			strncpy(h5path, *current_ground_track, strlen(*current_ground_track));
+			h5path[strlen(*current_ground_track)] = '/';
+			h5path[strlen(*current_ground_track) + 1] = '\0';
+			strcat(h5path, *current_ref_path);
+
+			copy_dataset_range(fin, fout, h5path, count_range);
+
+			free(h5path);
+			current_ref_path++;
+		}
+
+		free(count_range);
+
 		if (index_range) {
 			free(index_range);
 		}
