@@ -42,7 +42,7 @@ const char *scalar_datasets[] = {"/orbit_info/sc_orient",
 								 "/ancillary_data/start_cycle",
 								 0}; 
 
-const char *reference_datasets[] = {"geolocation/reference_photon_lat", 
+char *reference_datasets[] = {"geolocation/reference_photon_lat", 
 									"geolocation/reference_photon_lon", 
 									"geolocation/segment_ph_cnt",
 									0};
@@ -68,8 +68,8 @@ typedef struct BBox {
 } BBox;
 
 typedef struct Range_Indices {
-	unsigned long long min;
-	unsigned long long max;
+	size_t min;
+	size_t max;
 } Range_Indices;
 
 typedef struct Range_Doubles {
@@ -312,7 +312,7 @@ Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], si
 		range = &default_range;
 	}
 
-	PRINT_DEBUG("get_range range has min %llu and max %llu\n", range->min, range->max)
+	PRINT_DEBUG("get_range range has min %zu and max %zu\n", range->min, range->max)
 
 	Range_Doubles lat_range = get_minmax(lat_arr, *range);
 	Range_Doubles lon_range = get_minmax(lon_arr, *range);
@@ -436,7 +436,7 @@ Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
 	Range_Indices *index_range = get_range(lat_arr, num_elems_lat, lon_arr, num_elems_lon, bbox, NULL);
 	
 	if (index_range) {
-		PRINT_DEBUG("get_index_range using idex with min %llu and max %llu\n", index_range->min, index_range->max)
+		PRINT_DEBUG("get_index_range using index with min %zu and max %zu\n", index_range->min, index_range->max)
 	}
 
 	H5Dclose(lon_dset);
@@ -553,23 +553,42 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 
 	/* Create new dset */
 	hid_t dtype = H5Dget_type(source_dset);
-	hid_t fspace = H5Screate_simple(1, (hsize_t[]){extent}, NULL);
+
+	/* For multidimensional datasets, copy remaining dimensions into shape dataspace */
+	hid_t dataspace_source = H5Dget_space(source_dset);
+	int ndims = H5Sget_simple_extent_ndims(dataspace_source);
+
+	hsize_t *dims = malloc(ndims * sizeof(hsize_t));
+
+	if (0 > H5Sget_simple_extent_dims(dataspace_source, dims, NULL)) {
+		FUNC_GOTO_ERROR("Failed to get dataspace dim size")
+	}
+
+	dims[0] = extent;
+
+	hid_t fspace = H5Screate_simple(1, dims, NULL);
 
 	if (fspace == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Unable to create dstype")
 	}
 
 	hid_t dcpl = H5Dget_create_plist(source_dset);
-	hid_t dapl = H5Dget_access_plist(source_dset);
-	copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl);
-
-	/* Create selection corresponding to range */
-	if (0 > H5Sselect_hyperslab(fspace, H5S_SELECT_SET, (hsize_t[]){index_range->min},
-														(hsize_t[]){1},
-														(hsize_t[]){extent},
-														(hsize_t[]){1})) {
-		FUNC_GOTO_ERROR("Failed to select hyperslab")
+	if (dcpl == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get dcpl")
 	}
+
+	hid_t dapl = H5Dget_access_plist(source_dset);
+	if (dapl == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get dapl")
+	}
+
+	// TODO: For some reason, it selects chunk size 10000, which exceeds size of some dsets.
+	// Set chunk size = dset size for now
+	if (0 > H5Pset_chunk(dcpl, ndims, dims)) {
+		FUNC_GOTO_ERROR("Failed to set chunk size")
+	}
+	
+	copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl);
 
 	data = malloc(extent * sizeof(double));
 
@@ -578,11 +597,18 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 		FUNC_GOTO_ERROR("Failed to read from dset with hyperslab selection")
 	}
 
+
+	hssize_t npts = H5Sget_simple_extent_npoints(fspace);
+	PRINT_DEBUG("Size of extent copied = %zu\n", npts)
+
+	
+
 	if (H5Dwrite(copy_dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 		FUNC_GOTO_ERROR("Failed to write data when copying range")
 	}
 
 	free(data);
+	free(dims);
 	H5Dclose(copy_dset);
 	H5Pclose(dcpl);
 	H5Pclose(dapl);
@@ -643,7 +669,7 @@ Range_Indices* get_photon_count_range(hid_t fin, char *h5path, Range_Indices *ra
 	ret_range->min = sum_base;
 	ret_range->max = sum_base + sum_inc;
 
-	PRINT_DEBUG("Got photon count range %s for (%llu, %llu) of (%llu, %llu)\n", h5path, range->min, range->max, ret_range->min, ret_range->max)
+	PRINT_DEBUG("Got photon count range %s for (%zu, %zu) of (%zu, %zu)\n", h5path, range->min, range->max, ret_range->min, ret_range->max)
 	
 	free(data);
 	H5Dclose(dset);
@@ -955,7 +981,87 @@ int main(int argc, char **argv)
 	PRINT_DEBUG("Lon Range: %lf - %lf\n", bbox.min_lon, bbox.max_lon)
 
 	copy_root_attrs(fin, fout);
-	
+	copy_scalar_datasets(fin, fout);
+
+	char **current_ground_track = ground_tracks;
+
+	while(*current_ground_track != 0) {
+		hid_t attr_id;
+		hid_t group = H5Gcreate(fout, *current_ground_track, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+		Range_Indices *index_range = get_index_range(fin, *current_ground_track, &bbox);
+
+		if (index_range == NULL) {
+			PRINT_DEBUG("No index range found for ground track: %s\n", *current_ground_track)
+			
+			hid_t dspace = H5Screate_simple(1, (hsize_t[]){1}, NULL);
+			int bad_value = -1;
+
+			if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+			}
+
+			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
+				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+			}
+
+			if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+			}
+
+			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
+				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+			}
+
+			/* Go to next iteration */
+			current_ground_track++;
+			continue;
+			
+		}
+
+		PRINT_DEBUG("Got index_range (%zu, %zu)\n", index_range->min, index_range->max)
+		hid_t dspace = H5Screate_simple(1, (hsize_t[]){1}, NULL);
+
+		if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+			FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+		}
+
+		if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->min))) {
+			FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+		}
+
+		if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+			FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+		}
+
+		if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->max))) {
+			FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+		}
+
+		/* Copy lat, lon, and photo count markers */
+
+		char **current_ref_path = reference_datasets;
+
+		while(*current_ref_path != 0) {
+			/* Add slash between path names */
+			char *h5path = malloc(strlen(*current_ground_track) + strlen(*current_ref_path) + 2);
+			strncpy(h5path, *current_ground_track, strlen(*current_ground_track) + 1);
+			h5path[strlen(*current_ground_track)] = '/';
+			h5path[strlen(*current_ground_track) + 1] = '\0';
+			PRINT_DEBUG("%s\n", h5path)
+			strcat(h5path, *current_ref_path);
+			copy_dataset_range(fin, fout, h5path, index_range);
+
+			free(h5path);
+			current_ref_path++;
+		}
+		
+		if (index_range) {
+			free(index_range);
+		}
+		
+		current_ground_track++;
+	}
+
 	/* Close open objects */
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
