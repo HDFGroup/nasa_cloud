@@ -119,7 +119,6 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	hid_t dtype_id  = H5I_INVALID_HID;
 	hid_t dstype_id = H5I_INVALID_HID;
 	hid_t fout_attr = H5I_INVALID_HID;
-	hid_t attr_type = H5I_INVALID_HID;
 
 	void *attr_data = NULL;
 	
@@ -143,22 +142,27 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 		FUNC_GOTO_ERROR("Failed to create attribute in output file")
 	}
 	
-	if ((attr_type = H5Aget_type(fin_attr)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to get type of input file attribute")
-	}
+	attr_data = malloc(H5Tget_size(dtype_id));
 
-	attr_data = malloc(H5Tget_size(attr_type));
-
-	if (0 > H5Aread(fin_attr, attr_type, attr_data)) {
+	if (H5Aread(fin_attr, dtype_id, attr_data) < 0) {
 		FUNC_GOTO_ERROR("Failed to read from attribute")
 	}
 
-	if (0 > H5Awrite(fout_attr, attr_type, attr_data)) {
+	if (H5Awrite(fout_attr, dtype_id, attr_data) < 0) {
 		FUNC_GOTO_ERROR("Failed to write to copied attribute")
 	}
 
-	free(attr_data);
-	H5Aclose(fout_attr);
+	if (attr_data) {
+		free(attr_data);
+	}
+	
+	if (H5Aclose(fout_attr) < 0) {
+		FUNC_GOTO_ERROR("Failed to close output attribute")
+	}
+
+	if (H5Aclose(fin_attr) < 0) {
+		FUNC_GOTO_ERROR("Failed to close input attribute")
+	}
 
 	return ret_value;
 }
@@ -167,75 +171,105 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 	hid_t parent_group = H5I_INVALID_HID;
 	hid_t child_group = H5I_INVALID_HID;
-	hid_t dset = H5I_INVALID_HID;
+
+	hid_t dset   = H5I_INVALID_HID;
+	hid_t dtype  = H5I_INVALID_HID;
+	hid_t dstype = H5I_INVALID_HID;
+	hid_t dcpl   = H5I_INVALID_HID;
+	hid_t dapl   = H5I_INVALID_HID;
+	hid_t copied_scalar_dataset = H5I_INVALID_HID;
+
+	size_t num_elems = 0;
+	size_t elem_size = 0;
 
 	char *prev_group_name;
 	char *group_name;
 	char *dset_name;
 	char *dset_path;
 	char dset_path_buffer[FILEPATH_BUFFER_SIZE];
+
 	const char **current_dset = scalar_datasets;
 
 	void *data = NULL;
 
-	/* For each dataset in scalar_datasets */
+
+	/* Iterate over path to make sure all parent groups exist and get dset name */
 	while (*current_dset != 0) {
 		
-		/* Copy scalar dataset paths to stack for strtok */
+		/* Copy the dataset path for strtok */
 		dset_path = &(dset_path_buffer[0]);
 		strncpy(dset_path, *current_dset, strlen(*current_dset) + 1);
 
 		PRINT_DEBUG("Copying scalar dset %s\n", dset_path);
 
-		dset = H5Dopen(fin, dset_path, H5P_DEFAULT);
-
 		/* Separate filepath into groups */
 		group_name = strtok_r(dset_path, PATH_DELIMITER, &dset_path);
-		
-		if (group_name == NULL) {
-			group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
-		}
 
 		parent_group = fout;
 
+		/* Until end of path */
 		while(group_name != NULL) {
-			if (strcmp("", group_name) == 0) {
-				group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
-				continue;
-			}
 
+			/* If this group does not exist, attempt to create it */
 			H5E_BEGIN_TRY {
-				child_group = H5Gopen(parent_group, group_name, H5P_DEFAULT);
+				if ((child_group = H5Gopen(parent_group, group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					if ((child_group = H5Gcreate(parent_group, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					FUNC_GOTO_ERROR("Failed to create child group")
+					}
+				}
 			} H5E_END_TRY
-
-			if (H5I_INVALID_HID == child_group) {
-				child_group = H5Gcreate(parent_group, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-			}
 
 			/* Only close intermediate groups that were just created, not the file itself */
 			if (parent_group != fout) {
-				H5Gclose(parent_group);
+				if(H5Gclose(parent_group) < 0) {
+					FUNC_GOTO_ERROR("Failed to create group")
+				}
 			}
 			
 			parent_group = child_group;
 
 			/* If the end of the path is reached, keep track of dset name */
 			prev_group_name = group_name;
-			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path))) {
+			if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
 				dset_name = prev_group_name;
 			}
 			
 		}
 
-		hid_t dtype = H5Dget_type(dset);
-		hid_t dstype = H5Dget_space(dset);
-		hid_t dcpl = H5Dget_create_plist(dset);
-		hid_t dapl = H5Dget_access_plist(dset);
-		hid_t copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl);
+		/* Access information about dset */
+		if ((dset = H5Dopen(fin, *current_dset, H5P_DEFAULT)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to open dset")
+		}
+
+		if ((dtype = H5Dget_type(dset)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to get dtype")
+		}
+
+		if ((dstype = H5Dget_space(dset)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to get dstype")
+		}
+
+		if ((dcpl = H5Dget_create_plist(dset)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to get dcpl")
+		}
+
+		if ((dapl = H5Dget_access_plist(dset)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to get dapl")
+		}
+
+		if ((copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to create dset")
+		}
 		
-		
-		size_t num_elems = H5Sget_simple_extent_npoints(dstype);
-		data = malloc(num_elems * H5Tget_size(dtype));
+		if ((num_elems = H5Sget_simple_extent_npoints(dstype)) < 0) {
+			FUNC_GOTO_ERROR("Failed to get number of elements")
+		}
+
+		if ((elem_size = H5Tget_size(dtype)) == 0) {
+			FUNC_GOTO_ERROR("Failed to get dtype size")
+		}
+
+		data = calloc(num_elems, elem_size);
 
 		if (H5Dread(dset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 			FUNC_GOTO_ERROR("Failed to read dataset while copying scalar")
@@ -245,11 +279,26 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 			FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
 		}
 
-		free(data);
-		H5Dclose(copied_scalar_dataset);
-		H5Dclose(dset);
-		H5Pclose(dcpl);
-		H5Pclose(dapl);
+		if (data) {
+			free(data);
+		}
+
+		if (H5Dclose(copied_scalar_dataset) < 0) {
+			FUNC_GOTO_ERROR("Failed to close copied scalar dataset")
+		}
+
+		if (H5Dclose(dset) < 0) {
+			FUNC_GOTO_ERROR("Failed to close scalar dset")
+		}
+
+		if (H5Pclose(dcpl) < 0) {
+			FUNC_GOTO_ERROR("Failed to close dcpl")
+		}
+
+		if (H5Pclose(dapl) < 0) {
+			FUNC_GOTO_ERROR("Failed to close dapl")
+		}
+		
 		++current_dset;
 	}
 }
