@@ -102,8 +102,6 @@ typedef enum ConfigType {
 herr_t test_attr_callback(hid_t location_id, const char* attr_name, const H5A_info_t *ainfo, void *op_data) {
 	herr_t ret_value = SUCCEED;
 
-	PRINT_DEBUG("%s\n", attr_name);
-
 	return ret_value;
 }
 
@@ -298,7 +296,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		if (H5Pclose(dapl) < 0) {
 			FUNC_GOTO_ERROR("Failed to close dapl")
 		}
-		
+
 		++current_dset;
 	}
 }
@@ -562,6 +560,15 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	hid_t parent_group = H5I_INVALID_HID;
 	hid_t copy_dset = H5I_INVALID_HID;
 
+	hid_t dtype = H5I_INVALID_HID;
+	hid_t dataspace_source = H5I_INVALID_HID;
+	hid_t fspace = H5I_INVALID_HID;
+	hid_t dcpl = H5I_INVALID_HID;
+	hid_t dapl = H5I_INVALID_HID;
+
+	int ndims = 0;
+	hsize_t *dims = NULL;
+
 	char *prev_group_name;
 	char *group_name;
 	char *dset_name;
@@ -571,6 +578,8 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	void* data;
 
 	size_t extent = index_range->max - index_range->min;
+	size_t total_num_elems = 1;
+	size_t elem_size = 0;
 
 	PRINT_DEBUG("Creating dataset %s with extent %lu\n", h5path, extent)
 
@@ -584,34 +593,29 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	group_name = strtok_r(dset_path, PATH_DELIMITER, &dset_path);
 
 	while(group_name != NULL) {
-			if (strcmp("", group_name) == 0) {
-				group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path);
-				continue;
-			}
 
 			H5E_BEGIN_TRY {
-				child_group = H5Gopen(parent_group, group_name, H5P_DEFAULT);
+				if ((child_group = H5Gopen(parent_group, group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					if ((child_group = H5Gcreate(parent_group, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					FUNC_GOTO_ERROR("Failed to create child group")
+					}
+				}
 			} H5E_END_TRY
-
-			if (H5I_INVALID_HID == child_group) {
-				child_group = H5Gcreate(parent_group, group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-			}
 
 			// Only close intermediate groups that were just created, not the file itself
 			if (parent_group != fout) {
-				H5Gclose(parent_group);
+				if (H5Gclose(parent_group) < 0) {
+					FUNC_GOTO_ERROR("Failed to close parent group")
+				}
 			}
 			
 			parent_group = child_group;
 
 			// If the end of the path is reached, keep track of dset name
 			prev_group_name = group_name;
-			if (NULL == (group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path))) {
+			if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
 				dset_name = prev_group_name;
 			}
-
-			if (group_name) 
-				PRINT_DEBUG("New group name = %s\n", group_name)
 	}
 
 	/* Copy the data in the source dataset to a new dataset*/
@@ -622,72 +626,88 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	}
 
 	/* Create new dset */
-	hid_t dtype = H5Dget_type(source_dset);
+	if ((dtype = H5Dget_type(source_dset)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get dtype")
+	}
 
 	/* For multidimensional datasets, copy remaining dimensions into shape dataspace */
-	hid_t dataspace_source = H5Dget_space(source_dset);
-	int ndims = H5Sget_simple_extent_ndims(dataspace_source);
+	
+	if ((dataspace_source = H5Dget_space(source_dset)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to get dataspace from source")
+	}
 
-	hsize_t *dims = malloc(ndims * sizeof(hsize_t));
+	if ((ndims = H5Sget_simple_extent_ndims(dataspace_source)) < 0) {
+		FUNC_GOTO_ERROR("Failed to get number of dims")
+	}
 
-	if (0 > H5Sget_simple_extent_dims(dataspace_source, dims, NULL)) {
+	dims = calloc(ndims, sizeof(hsize_t));
+
+	if (H5Sget_simple_extent_dims(dataspace_source, dims, NULL) < 0) {
 		FUNC_GOTO_ERROR("Failed to get dataspace dim size")
 	}
 
 	dims[0] = extent;
 
-	hid_t fspace = H5Screate_simple(ndims, dims, NULL);
-
-	if (fspace == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Unable to create dstype")
+	if ((fspace = H5Screate_simple(ndims, dims, NULL)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to create simple dataspace")
 	}
 
-	hid_t dcpl = H5Dget_create_plist(source_dset);
-	if (dcpl == H5I_INVALID_HID) {
+	if ((dcpl = H5Dget_create_plist(source_dset)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Failed to get dcpl")
 	}
 
-	hid_t dapl = H5Dget_access_plist(source_dset);
-	if (dapl == H5I_INVALID_HID) {
+	if ((dapl = H5Dget_access_plist(source_dset)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Failed to get dapl")
 	}
 
 	// TODO: For some reason, it selects chunk size 10000, which exceeds size of some dsets.
 	// Set chunk size = dset size for now
-	if (0 > H5Pset_chunk(dcpl, ndims, dims)) {
+	if (H5Pset_chunk(dcpl, ndims, dims) < 0) {
 		FUNC_GOTO_ERROR("Failed to set chunk size")
 	}
 	
-	copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl);
-
-	size_t total_num_elems = 1;
+	if ((copy_dset = H5Dcreate(parent_group, dset_name, dtype, fspace, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to create copy dset")
+	}
 
 	for (size_t i = 0; i < ndims; i++) {
 		total_num_elems *= dims[i];
 	}
 
-	data = malloc(total_num_elems * H5Tget_size(H5Dget_type(source_dset)));
+	if ((elem_size = H5Tget_size(dtype)) == 0) {
+		FUNC_GOTO_ERROR("Failed to get size of dtype")
+	}
+
+	data = calloc(total_num_elems, elem_size);
 
 	/* Read and copy selected data */
 	if (H5Dread(source_dset, H5Dget_type(source_dset), H5S_ALL, fspace, H5P_DEFAULT, data) < 0) {
 		FUNC_GOTO_ERROR("Failed to read from dset with hyperslab selection")
 	}
 
-
-	hssize_t npts = H5Sget_simple_extent_npoints(fspace);
-	PRINT_DEBUG("Size of extent copied = %zu\n", npts)
-
-	
-
 	if (H5Dwrite(copy_dset, H5Dget_type(source_dset), H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
 		FUNC_GOTO_ERROR("Failed to write data when copying range")
 	}
 
-	free(data);
-	free(dims);
-	H5Dclose(copy_dset);
-	H5Pclose(dcpl);
-	H5Pclose(dapl);
+	if (data) {
+		free(data);
+	}
+
+	if (dims) {
+		free(dims);
+	}
+
+	if (H5Dclose(copy_dset) < 0) {
+		FUNC_GOTO_ERROR("Failed to close copy dset")
+	}
+
+	if (H5Pclose(dcpl) < 0) {
+		FUNC_GOTO_ERROR("Failed to close dcpl")
+	}
+
+	if (H5Pclose(dapl) < 0) {
+		FUNC_GOTO_ERROR("Failed to close dapl")
+	}
 }
 
 void test_copy_dataset_range(hid_t fin, hid_t fout) {
@@ -762,36 +782,6 @@ void test_get_photon_count_range(hid_t fin) {
 	free(ret);
 	return;
 }
-/*
-
-void save_georegion(hid_t fout, BBox *bbox) {
-	// TBD: Use CF convention?
-
-	// open, read, close
-	
-	hid_t attr = H5I_INVALID_HID;
-	double attr_buf = 0;
-
-	H5Aiterate(fout, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &fout);
-	if (0 > (attr = H5Aopen_name(fout, "max_lat"))) {
-		FUNC_GOTO_ERROR("Failed to open attribute")
-	}
-
-	if (0 > H5Aread(attr, H5T_NATIVE_DOUBLE, &attr_buf)) {
-		FUNC_GOTO_ERROR("Failed to read from attribute")
-	}
-
-	H5Aclose(attr);
-
-}
-
-void test_save_georegion(hid_t file) {
-	BBox bbox;
-
-	save_georegion(file, &bbox);
-	
-}
-*/
 
 // TODO Move process_layer and get_config_values to another file
 
@@ -878,9 +868,6 @@ void process_layer(yaml_parser_t *parser, void *storage_location, ConfigType typ
 					}
 				}
 						
-				break;
-
-				PRINT_DEBUG("%s\n", "Non-scalar event")
 				break;
 		}
 
@@ -1116,7 +1103,7 @@ int main(int argc, char **argv)
 			strncpy(h5path, *current_ground_track, strlen(*current_ground_track) + 1);
 			h5path[strlen(*current_ground_track)] = '/';
 			h5path[strlen(*current_ground_track) + 1] = '\0';
-			PRINT_DEBUG("%s\n", h5path)
+
 			strcat(h5path, *current_ref_path);
 			copy_dataset_range(fin, fout, h5path, index_range);
 
