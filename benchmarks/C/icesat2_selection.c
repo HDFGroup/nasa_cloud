@@ -5,8 +5,6 @@
 
 #include "hdf5.h"
 
-//#include "rest_vol_public.h"
-
 #define SUCCEED 0
 #define FAIL (-1)
 
@@ -98,15 +96,6 @@ typedef enum ConfigType {
 	CONFIG_DOUBLE_T
 } ConfigType;
 
-/* Testing callback for H5Aiterate that prints the name of each attribute of the parent object. */
-herr_t test_attr_callback(hid_t location_id, const char* attr_name, const H5A_info_t *ainfo, void *op_data) {
-	herr_t ret_value = SUCCEED;
-
-	PRINT_DEBUG("%s\n", attr_name)
-	
-	return ret_value;
-}
-
 /* Copy each attribute from fin to the file whose hid_t is pointed to by fout_data */
 herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ainfo, void *fout_data) {
 	herr_t ret_value = SUCCEED;
@@ -152,10 +141,8 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 		FUNC_GOTO_ERROR("Failed to write to copied attribute")
 	}
 
-	if (attr_data) {
-		free(attr_data);
-	}
-	
+	free(attr_data);
+
 	if (H5Aclose(fout_attr) < 0) {
 		FUNC_GOTO_ERROR("Failed to close output attribute")
 	}
@@ -281,9 +268,7 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 			FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
 		}
 
-		if (data) {
-			free(data);
-		}
+		free(data);
 
 		if (H5Dclose(copied_scalar_dataset) < 0) {
 			FUNC_GOTO_ERROR("Failed to close copied scalar dataset")
@@ -313,25 +298,6 @@ herr_t copy_root_attrs(hid_t fin, hid_t fout) {
 	return ret_value;
 }
 
-void attr_iteration_test() {
-	hid_t file1 = H5Fcreate("/home/test_user1/temp1", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t file2 = H5Fcreate("/home/test_user1/temp2", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t null_dstype= H5Screate(H5S_NULL);
-
-	hid_t attr1 = H5Acreate(file1, "attr1", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t attr2 = H5Acreate(file1, "attr2", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t attr3 = H5Acreate(file1, "attr3", H5T_C_S1, null_dstype, H5P_DEFAULT, H5P_DEFAULT);
-
-	copy_root_attrs(file1, file2);
-	H5Aiterate(file2, H5_INDEX_NAME, H5_ITER_INC, NULL, test_attr_callback, &file2);
-
-	H5Fclose(file1);
-	H5Fclose(file2);
-	H5Aclose(attr1);
-	H5Aclose(attr2);
-	H5Aclose(attr3);
-}
-
 /* Get min and max values for the given array within the given range*/
 Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	Range_Doubles out_range;
@@ -350,18 +316,6 @@ Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	}
 
 	return out_range;
-}
-
-bool test_get_minmax() {
-	Range_Indices ri;
-	ri.min = 2;
-	ri.max = 6;
-
-	double arr[] = {0.0, 1.1, 2.2, 3.3, 0.4, 5.5, 0.06, 7.7};
-
-	Range_Doubles rd = get_minmax(arr, ri);
-
-	return true;
 }
 
 /* Return the lowest and highest indices of the given array where the lat/lon values fall within the given bounding box */
@@ -443,25 +397,6 @@ Range_Indices* get_range(double lat_arr[], size_t lat_size, double lon_arr[], si
 	return ret_range;
 }
 
-bool test_get_range() {
-	double lat_arr[] = {0.0, 1.1, 2.2, 3.3};
-	double lon_arr[] = {0.0, 1.1, 2.2, 3.3};
-	BBox bbox;
-	BBox *bbox_ptr = &bbox;
-	bbox.max_lat = 2.0;
-	bbox.min_lat = 0.0;
-	bbox.max_lon = 3.0;
-	bbox.min_lon = 1.0;
-
-	Range_Indices *range = NULL;
-
-	size_t lat_size = sizeof(lat_arr) / sizeof(lat_arr[0]);
-	size_t lon_size = sizeof(lon_arr) / sizeof(lon_arr[0]);
-
-	Range_Indices *ri = get_range(lat_arr, lat_size, lon_arr, lon_size, bbox_ptr, range);
-	free(ri);
-}
-
 /* Get min/max index for the given lat/lon bounds */
 Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
 	PRINT_DEBUG("get_index_range with ground_track = %s\n", ground_track)
@@ -519,42 +454,6 @@ Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
 	free(lon_arr);
 
 	return index_range;
-}
-
-void test_get_index_range(hid_t fin) {
-	/* Entirely within */
-	BBox bbox;
-	bbox.min_lat = -115;
-	bbox.max_lat = 60;
-	bbox.min_lon = -115;
-	bbox.max_lon = 70;
-
-	Range_Indices *ri = get_index_range(fin, ground_tracks[0], &bbox);
-	free(ri);
-
-	/* Entirely outside */
-	bbox.min_lat = 0;
-	bbox.max_lat = 0;
-	bbox.min_lon = 0;
-	bbox.max_lon = 0;
-
-	ri = get_index_range(fin, ground_tracks[0], &bbox);
-
-	if (ri) {
-		free(ri);
-	}
-
-	/* Partially within bbox */
-	bbox.min_lat = -55;
-	bbox.max_lat = 40;
-	bbox.min_lon = -115;
-	bbox.max_lon = 70;
-
-	ri = get_index_range(fin, ground_tracks[0], &bbox);
-
-	if (ri) {
-		free(ri);
-	}
 }
 
 /* Copy given index range from source dataset to destination dataset */
@@ -736,25 +635,11 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 		FUNC_GOTO_ERROR("Failed to write data when copying range")
 	}
 
-	if (start_arr) {
-		free(start_arr);
-	}
-
-	if (stride_arr) {
-		free(stride_arr);
-	}
-
-	if (block_size_arr) {
-		free(block_size_arr);
-	}
-
-	if (data) {
-		free(data);
-	}
-
-	if (dims) {
-		free(dims);
-	}
+	free(start_arr);
+	free(stride_arr);
+	free(block_size_arr);
+	free(data);
+	free(dims);
 
 	if (H5Dclose(copy_dset) < 0) {
 		FUNC_GOTO_ERROR("Failed to close copy dset")
@@ -767,16 +652,6 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	if (H5Pclose(dapl) < 0) {
 		FUNC_GOTO_ERROR("Failed to close dapl")
 	}
-}
-
-void test_copy_dataset_range(hid_t fin, hid_t fout) {
-	char *h5path = "gt1r/geolocation/reference_photon_lat";
-	Range_Indices ri;
-	ri.max = 25000;
-	ri.min = 0;
-
-	copy_dataset_range(fin, fout, h5path, &ri);
-	return;
 }
 
 /* Sum up elements from 0 to index in given dataset*/
@@ -832,17 +707,6 @@ Range_Indices* get_photon_count_range(hid_t fin, char *h5path, Range_Indices *ra
 	free(data);
 	H5Dclose(dset);
 	return ret_range; 
-}
-
-void test_get_photon_count_range(hid_t fin) {
-	char *path = "gt1l/geolocation/segment_ph_cnt";
-	Range_Indices range;
-	range.max = 6000;
-	range.min = 1000;
-
-	Range_Indices *ret = get_photon_count_range(fin, path, &range);
-	free(ret);
-	return;
 }
 
 // TODO Move process_layer and get_config_values to another file
@@ -1012,10 +876,7 @@ int main(int argc, char **argv)
 	hid_t fapl_id;
 	hid_t fcpl_id;
 
-	/* Initialize REST VOL connector */
-	//H5rest_init();
 	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-	//H5Pset_fapl_rest_vol(fapl_id);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
 
 	ConfigValues *config = malloc(sizeof(*config));
@@ -1192,10 +1053,7 @@ int main(int argc, char **argv)
 		}
 
 		free(count_range);
-
-		if (index_range) {
-			free(index_range);
-		}
+		free(index_range);
 		
 		current_ground_track++;
 	}
@@ -1217,7 +1075,5 @@ int main(int argc, char **argv)
 	free(config->output_filename);
 	free(config);
 	
-	/* Terminate the REST VOL connector. */
-	//H5rest_term();
 	return 0;
 }
