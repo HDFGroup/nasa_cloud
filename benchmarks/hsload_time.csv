@@ -1,2 +1,2 @@
-start	finish	elapsed	machine	source
-2023-04-18 08:21:04	2023-04-18 08:45:26	1462	m5.4xlarge	s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5
+start,	finish,	elapsed,	machine,	source
+2023-04-18 08:21:04,	2023-04-18 08:45:26,	1462,	m5.4xlarge,	s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5
