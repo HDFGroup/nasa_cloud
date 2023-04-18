@@ -4,5 +4,5 @@ run_number, start,	finish,	elapsed,	machine,    input_folder,   output_folder,  
 1, 2023-04-18 12:35:52.9, 2023-04-18 12:36:58.1, 65.2, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , ,
 1, 2023-04-18 13:02:40.3, 2023-04-18 13:03:16.2, 35.9, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 602, 1858,
 2, 2023-04-18 13:18:54.9, 2023-04-18 13:19:01.7,  6.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0,
-3, 2023-04-18 13:25:41.9, 2023-04-18 13:25:48.2,  6.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0
+3, 2023-04-18 13:25:41.9, 2023-04-18 13:25:48.2,  6.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0,
 1, 2023-04-18 15:44.16.5, 2023-04-18 15:44:53.2, 36.7, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 1869, 591, set overrides: data_cache_max_req_size=4m; data_cache_size=512m
