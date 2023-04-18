@@ -216,10 +216,14 @@ logging.basicConfig(filename=logfname, format='%(levelname)s %(asctime)s %(messa
 logging.debug(f"set log_level to {loglevel}")
 
 input_dirname = config.get("input_foldername")
+if not input_dirname or input_dirname[-1] != '/':
+    sys.exit("expected input_foldername to end with '/'")
 input_filename = config.get("input_filename")
 input_filepath = f"{input_dirname}{input_filename}"
 logging.info(f"input filepath: {input_filepath}")
 output_dirname = config.get("output_foldername")
+if not output_dirname or output_dirname[-1] != '/':
+    sys.exit("expected output_foldername to end with '/'")
 output_filename = config.get("output_filename")
 output_filepath = f"{output_dirname}{output_filename}"
 logging.info(f"output filepath: {output_filepath}")
