@@ -5,7 +5,7 @@ input_foldername: "../../data/"
 #input_foldername: "s3://hdf5.sample/data/NASA/ICESat2/"
 #input foldername: "hdf5://home/jreadey/icesat2/"
 input_filename: ATL03_20181017222812_02950102_005_01.h5
-output_foldername: "."
+output_foldername: "./"
 output_filename: atl_data.h5
 # some sample lat lon values from file ATL03_20181017222812_02950102_005_01.h5
 # index   lat    lon
