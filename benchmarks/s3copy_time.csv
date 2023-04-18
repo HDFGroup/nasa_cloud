@@ -1,0 +1,3 @@
+elapsed,	filesize,	mb/s,	machine, 	source
+9.74,   3380,   347,    m5.4xlarge,  	s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5   
+
