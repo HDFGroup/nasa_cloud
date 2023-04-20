@@ -12,6 +12,16 @@
 
 #define PATH_DELIMITER "/"
 
+/* TODO: Make this a build-time option. 
+ * For now, the selection test can be made to use the regular HDF5 library by changing this to #undef, 
+ * and unsetting the environment variables HDF5_PLUGIN_PATH and HDF5_VOL_CONNECTOR 
+ */
+#define USE_REST_VOL
+
+#ifdef USE_REST_VOL
+#include "rest_vol_public.h"
+#endif
+
 /*
  * Macro to push the current function to the current error stack
  * and then goto the "done" label, which should appear inside the
@@ -30,6 +40,8 @@
 				}                                                                  \
 
 #define CONFIG_FILENAME "../config/config.yml"
+
+#define PATH_PREFIX "/home/test_user1/"
 
 bool debug = false;
 bool check_output = false;
@@ -109,6 +121,9 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 	hid_t dstype_id = H5I_INVALID_HID;
 	hid_t fout_attr = H5I_INVALID_HID;
 
+	size_t dtype_size = 0;
+	size_t num_elems = 0;
+
 	void *attr_data = NULL;
 	
 	if ((fin_attr = H5Aopen(fin, attr_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
@@ -131,7 +146,17 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 		FUNC_GOTO_ERROR("Failed to create attribute in output file")
 	}
 	
-	attr_data = malloc(H5Tget_size(dtype_id));
+	if ((dtype_size = H5Tget_size(dtype_id)) == 0) {
+		FUNC_GOTO_ERROR("Failed to get size of datatype")
+	}
+
+	if ((num_elems = H5Sget_simple_extent_npoints(dstype_id)) < 0) {
+		FUNC_GOTO_ERROR("Failed to get number of elements")
+	}
+
+	if ((attr_data = malloc(dtype_size * num_elems)) == 0) {
+		FUNC_GOTO_ERROR("Failed to allocate memory for dtype")
+	}
 
 	if (H5Aread(fin_attr, dtype_id, attr_data) < 0) {
 		FUNC_GOTO_ERROR("Failed to read from attribute")
@@ -840,73 +865,63 @@ ConfigValues* get_config_values(char *yaml_config_filename, ConfigValues *config
 	return config;
 }
 
-herr_t show_data_callback(hid_t obj, const char *name, const H5O_info2_t *info, void *op_data) {
-
-	hid_t this_obj = H5I_INVALID_HID;
-
-	if ((this_obj = H5Oopen(obj, name, H5P_DEFAULT)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to open object in callback")
-	}
-
-	H5Oclose(this_obj);
-	return 0;
-}
-void show_file_info(hid_t file) {
-	// Iterate over all groups, attributes, datasets, and show their size
-	if (H5Ovisit(file, H5_INDEX_NAME, H5_ITER_INC, show_data_callback, NULL, 0) < 0) {
-		FUNC_GOTO_ERROR("Failed to visit objects")
-	}
-
-	
-}
-
 int main(int argc, char **argv) 
 {
+
+	hid_t fapl_id = H5I_INVALID_HID;
+	hid_t fcpl_id = H5I_INVALID_HID;
+	hid_t fin = H5I_INVALID_HID;
+	hid_t fout = H5I_INVALID_HID;
+
+	char *input_path = NULL;
+	char *output_path = NULL;
+
+	ConfigValues *config = NULL;
+
+	BBox bbox;
 
 	for (size_t optind = 1; optind < argc; optind++) {
 		if (strcmp(argv[optind], "-debug") == 0) {
 			debug = true;
 		}
-
-		if (strcmp(argv[optind], "-checkoutput") == 0) {
-			check_output = true;
-		}
 	}
 
-	hid_t fapl_id;
-	hid_t fcpl_id;
-
-	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
+	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
 
-	ConfigValues *config = malloc(sizeof(*config));
+#ifdef USE_REST_VOL
+		H5rest_init();
+		H5Pset_fapl_rest_vol(fapl_id);
+		PRINT_DEBUG("== Using REST VOL == \n")
+#endif
+
+	config = malloc(sizeof(*config));
 	config = get_config_values(CONFIG_FILENAME, config);
 
-	char *input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
+#ifdef USE_REST_VOL
+		free(config->input_foldername);
+		free(config->output_foldername);
+		config->input_foldername = "/home/test_user1/";
+		config->output_foldername = "/home/test_user1/";
+#endif
+
+	input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
-	hid_t fin = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id);
 
-	char *output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
+
+	if ((fin = H5Fopen(input_path, H5F_ACC_RDWR, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to open input file")
+	}
+
+	output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
 
-	if (check_output) {
-		htri_t acc;
-		if (0 > (acc = H5Fis_accessible(output_path, fapl_id))) {
-			FUNC_GOTO_ERROR("Could not check if output is accessible\n")
-		} else if (acc == 0) {
-			PRINT_DEBUG("Output is inaccessible. Proceeding with regular behavior...\n")
-		} else {
-			hid_t out = H5Fopen(output_path, H5F_ACC_RDONLY, fapl_id);
-			PRINT_DEBUG("Showing file info\n")
-			show_file_info(out);
-			H5Fclose(out);
-			exit(0);
-		}
+	if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to create output file")
 	}
 
-	hid_t fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id);
 
 	PRINT_DEBUG("Input filepath = %s%s\n", config->input_foldername, config->input_filename)
 	PRINT_DEBUG("Output filepath = %s%s\n", config->output_foldername, config->output_filename)
@@ -939,7 +954,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	BBox bbox;
 	bbox.min_lon = min_lon;
 	bbox.max_lon = max_lon;
 	bbox.min_lat = min_lat;
@@ -988,7 +1002,7 @@ int main(int argc, char **argv)
 		}
 
 		PRINT_DEBUG("Got index_range (%zu, %zu)\n", index_range->min, index_range->max)
-		//hid_t dspace = H5Screate_simple(1, (hsize_t[]){1}, NULL);
+
 		hid_t dspace_scalar = H5Screate(H5S_SCALAR);
 
 		if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace_scalar, H5P_DEFAULT, H5P_DEFAULT))) {
@@ -1059,6 +1073,12 @@ int main(int argc, char **argv)
 	}
 
 	/* Close open objects */
+	PRINT_DEBUG("Selection test complete\n");
+
+#ifdef USE_REST_VOL
+		H5rest_term();
+#endif
+
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
 	H5Fclose(fin);
@@ -1069,9 +1089,13 @@ int main(int argc, char **argv)
 
 	free(config->loglevel);
 	free(config->logfile);
-	free(config->input_foldername);
+
+#ifndef USE_REST_VOL
+free(config->input_foldername);
+free(config->output_foldername);
+#endif
+
 	free(config->input_filename);
-	free(config->output_foldername);
 	free(config->output_filename);
 	free(config);
 	
