@@ -203,13 +203,10 @@ def h5File(filepath, mode='r'):
         f = h5py.File(s3.open(filepath, 'rb'), mode=mode)
     elif filepath.startswith("http"):
         # use ros3 driver
-        aws_region = config.get("AWS_REGION").encode("utf-8")
-        secret_id = config.get("AWS_ACCESS_KEY_ID").encode("utf-8")
-        secret_key = config.get("AWS_SECRET_ACCESS_KEY").encode("utf-8")
-        print("aws_region:", aws_region)
-        print("secret_id:", secret_id)
-        print("secret_key:", secret_key)
-        f = h5py.File(filepath, mode=mode, aws_region=aws_region, secret_id=secret_id, secret_key=secret_key)
+        aws_region = config.get("aws_region").encode("utf-8")
+        secret_id = config.get("aws_access_key_id").encode("utf-8")
+        secret_key = config.get("aws_secret_access_key").encode("utf-8")
+        f = h5py.File(filepath, mode=mode, driver="ros3", aws_region=aws_region, secret_id=secret_id, secret_key=secret_key)
     else:
         f = h5py.File(filepath, mode=mode)
     return f
