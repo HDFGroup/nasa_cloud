@@ -1,9 +1,10 @@
 # ICESat-2 tests configuration
 loglevel: INFO
 logfile: null
-input_foldername: "../../data/"
+#input_foldername: "../../data/"
 #input_foldername: "s3://hdf5.sample/data/NASA/ICESat2/"
 #input foldername: "hdf5://home/jreadey/icesat2/"
+input_foldername: "http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/"
 input_filename: ATL03_20181017222812_02950102_005_01.h5
 output_foldername: "./"
 output_filename: atl_data.h5

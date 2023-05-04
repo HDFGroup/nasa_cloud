@@ -201,6 +201,15 @@ def h5File(filepath, mode='r'):
             raise ValueError("s3fs can only be used with read access mode")
         s3 = s3fs.S3FileSystem()
         f = h5py.File(s3.open(filepath, 'rb'), mode=mode)
+    elif filepath.startswith("http"):
+        # use ros3 driver
+        aws_region = config.get("AWS_REGION").encode("utf-8")
+        secret_id = config.get("AWS_ACCESS_KEY_ID").encode("utf-8")
+        secret_key = config.get("AWS_SECRET_ACCESS_KEY").encode("utf-8")
+        print("aws_region:", aws_region)
+        print("secret_id:", secret_id)
+        print("secret_key:", secret_key)
+        f = h5py.File(filepath, mode=mode, aws_region=aws_region, secret_id=secret_id, secret_key=secret_key)
     else:
         f = h5py.File(filepath, mode=mode)
     return f
