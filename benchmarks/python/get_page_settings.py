@@ -29,7 +29,6 @@ elif filepath.startswith("http"):
             sys.exit(f"env variable: {env_name} must be set for ros3")
         env_value = os.environ[env_name]
         kwargs[ros3_param] = env_value.encode("utf-8")
-    print("kwargs:", kwargs)
     f = h5py.File(filepath, **kwargs)
 else:
     f = h5py.File(filepath, **kwargs)
