@@ -1,10 +1,14 @@
 # ICESat-2 tests configuration
-loglevel: INFO
+loglevel: WARNING 
 logfile: null
-input_foldername: "../../../../data/"
-#input_foldername: "s3://hdf5.sample/data/NASA/ICESat2/"
-#input foldername: "hdf5://home/jreadey/icesat2/"
-#input_foldername: "http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/"
+machine: m5.4xlarge
+input_foldername: ../../../../data/
+#input_foldername: s3://hdf5.sample/data/NASA/ICESat2/
+#input_foldername: hdf5://home/test_user1/icesat2/
+#input_foldername: hdf5://home/test_user1/icesat2/linked/
+#input_foldername: http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/
+page_buf_size_exp: 24
+#page_buf_size_exp: 0 
 aws_region: us-west-2
 aws_access_key_id: ""
 aws_secret_access_key: ""

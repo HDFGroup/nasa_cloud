@@ -1,6 +1,8 @@
 from collections import namedtuple
 
+from datetime import datetime
 import sys
+import time
 import logging
 import s3fs
 import h5py
@@ -193,27 +195,37 @@ def get_loglevel():
 # generic file open -> return h5py(filename) or h5pyd(filename)
 # based on a "hdf5://" prefix or not
 
-def h5File(filepath, mode='r'):
+def h5File(filepath, mode='r', page_buf_size=None):
+    kwargs = {'mode': mode}
+    if page_buf_size is not None:
+        logging.info(f"using page_buf_size of {page_buf_size}")
+        kwargs['page_buf_size'] = page_buf_size
+        kwargs['fs_strategy'] = "page"
     if filepath.startswith("hdf5://"):
-        f = h5pyd.File(filepath, mode=mode)
+        f = h5pyd.File(filepath, **kwargs)
     elif filepath.startswith("s3://"):
         if mode != 'r':
             raise ValueError("s3fs can only be used with read access mode")
         s3 = s3fs.S3FileSystem()
-        f = h5py.File(s3.open(filepath, 'rb'), mode=mode)
+        f = h5py.File(s3.open(filepath, 'rb'), **kwargs)
     elif filepath.startswith("http"):
         # use ros3 driver
-        aws_region = config.get("aws_region").encode("utf-8")
-        secret_id = config.get("aws_access_key_id").encode("utf-8")
-        secret_key = config.get("aws_secret_access_key").encode("utf-8")
-        f = h5py.File(filepath, mode=mode, driver="ros3", aws_region=aws_region, secret_id=secret_id, secret_key=secret_key)
+        kwargs['driver'] = "ros3"
+        kwargs['aws_region'] = config.get("aws_region").encode("utf-8")
+        kwargs['secret_id'] = config.get("aws_access_key_id").encode("utf-8")
+        kwargs['secret_key'] = config.get("aws_secret_access_key").encode("utf-8")
+        f = h5py.File(filepath, **kwargs)
     else:
-        f = h5py.File(filepath, mode=mode)
+        f = h5py.File(filepath, **kwargs)
     return f
 
 #
 # main
 #
+if len(sys.argv) > 1:
+    run_number = int(sys.argv[1])
+else:
+    run_number = 1
 
 # setup logging
 logfname = config.get("log_file")
@@ -222,12 +234,23 @@ logging.basicConfig(filename=logfname, format='%(levelname)s %(asctime)s %(messa
 logging.debug(f"set log_level to {loglevel}")
 
 input_dirname = config.get("input_foldername")
+print(f"input_dirname: [{input_dirname}]")
 if not input_dirname or input_dirname[-1] != '/':
     sys.exit("expected input_foldername to end with '/'")
 input_filename = config.get("input_filename")
 input_filepath = f"{input_dirname}{input_filename}"
 logging.info(f"input filepath: {input_filepath}")
 output_dirname = config.get("output_foldername")
+page_buf_size_exp = 0
+if input_filename.startswith("PAGE10MiB"):
+    page_buf_size_exp = int(config.get("page_buf_size_exp"))
+    logging.info(f"page_buf_size_exp: {page_buf_size_exp}")
+    if page_buf_size_exp > 0:
+        page_buf_size = 2 ** page_buf_size_exp
+    else:
+        page_buf_size = None  
+else:
+    page_buf_size = None
 if not output_dirname or output_dirname[-1] != '/':
     sys.exit("expected output_foldername to end with '/'")
 output_filename = config.get("output_filename")
@@ -258,8 +281,10 @@ bbox = BBox(min_lon, max_lon, min_lat, max_lat)
 logging.info(f"lat range: {bbox.min_lat:.4f} - {bbox.max_lat:.4f}")
 logging.info(f"lon range: {bbox.min_lon:.4f} - {bbox.max_lon:.4f}")
 
+start_time = time.time()
+dt = datetime.fromtimestamp(start_time)
 
-with h5File(input_filepath) as fin, h5File(output_filepath, "w") as fout:
+with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=page_buf_size) as fout:
     copy_root_attrs(fin, fout)
     copy_scalar_datasets(fin, fout)
     save_georegion(fout, bbox)
@@ -289,6 +314,22 @@ with h5File(input_filepath) as fin, h5File(output_filepath, "w") as fout:
         for ref_path in ph_count_datasets:
            h5path = f"{ground_track}/{ref_path}"
            copy_dataset_range(fin, fout, h5path, count_range)
+
+stop_time = time.time()
+dt = datetime.fromtimestamp(start_time)
+start_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+dt = datetime.fromtimestamp(stop_time)
+stop_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+elapsed = stop_time - start_time
+machine = config.get("machine")
+# print result for inclusion in benchmark csv
+csv_str = f"{run_number}, {start_str}, {stop_str}, {elapsed:5.1f}, {machine}, "
+csv_str += f"{input_dirname}, {output_dirname}, {input_filename},    , , , , , , "
+if page_buf_size_exp > 0:
+    csv_str += f"page_buf_size_exp: {page_buf_size_exp}"
+print(csv_str)
+
+
         
  
 

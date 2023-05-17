@@ -34,6 +34,10 @@ else:
     f = h5py.File(filepath, **kwargs)
     
 print(f"got file: {f}")
+fcpl = f.id.get_create_plist()
+page_size = fcpl.get_file_space_page_size()
+print(f"page size: {page_size}")
+
 fapl = f.id.get_access_plist()
 page_buffer_size = fapl.get_page_buffer_size()
 print(f"page buffer size: {page_buffer_size}")
