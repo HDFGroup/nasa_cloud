@@ -2,7 +2,8 @@
 loglevel: WARNING 
 logfile: null
 machine: m5.4xlarge
-input_foldername: ../../../../data/
+#input_foldername: ../../../../data/
+input_foldername: ../../../../mybuckets/hdf5/data/ICESat2/
 #input_foldername: s3://hdf5.sample/data/NASA/ICESat2/
 #input_foldername: hdf5://home/test_user1/icesat2/
 #input_foldername: hdf5://home/test_user1/icesat2/linked/
