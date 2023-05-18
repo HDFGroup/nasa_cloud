@@ -64,19 +64,19 @@ def get_minmax(arr, range):
 
 # return min, max indexes of the given array where array values fall 
 # withing min/max val
-def get_range(lat_arr, lon_arr, bbox, range=None):
+def get_range(lat_arr, lon_arr, bbox, index_range=None):
     if lat_arr.shape[0] != lon_arr.shape[0]:
         raise ValueError("expected lat and lon arrays to have same shape")
     extent = lat_arr.shape[0]
     if extent == 0:
         return None
-    if range is None:
-        range = Range(0, extent)
+    if index_range is None:
+        index_range = Range(0, extent)
 
-    logging.debug(f"get_range {range.min}:{range.max}")
+    logging.debug(f"get_range {index_range.min}:{index_range.max}")
 
-    lat_range = get_minmax(lat_arr, range)
-    lon_range = get_minmax(lon_arr, range)
+    lat_range = get_minmax(lat_arr, index_range)
+    lon_range = get_minmax(lon_arr, index_range)
 
     # if entirely out of bbox, return None
     if lat_range.min > bbox.max_lat:
@@ -94,11 +94,11 @@ def get_range(lat_arr, lon_arr, bbox, range=None):
             if lon_range.min >= bbox.min_lon:
                 if lon_range.max <= bbox.max_lon:
                     logging.debug('return inside bbox')
-                    return range 
+                    return index_range 
     
-    mid_index = (range.min + range.max) // 2
-    range_low =  get_range(lat_arr, lon_arr, bbox, range=Range(range.min, mid_index))
-    range_high = get_range(lat_arr, lon_arr, bbox, range=Range(mid_index, range.max))
+    mid_index = (index_range.min + index_range.max) // 2
+    range_low =  get_range(lat_arr, lon_arr, bbox, index_range=Range(index_range.min, mid_index))
+    range_high = get_range(lat_arr, lon_arr, bbox, index_range=Range(mid_index, index_range.max))
     if range_low is None:
         logging.debug("return range high")
         return range_high
