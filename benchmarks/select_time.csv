@@ -30,3 +30,5 @@ run_number, start,	finish,	elapsed (sec),	machine,    input_folder,   output_fol
 1, 2023-05-17 20:05:19, 2023-05-17 20:06:10,  51.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
 2, 2023-05-17 20:08:15, 2023-05-17 20:08:21,   5.5, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
 3, 2023-05-17 20:09:13, 2023-05-17 20:09:18,   5.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-05-25 17:53:51, 2023-05-25 17:54:54,  62.5, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
+1, 2023-05-25 17:57:24, 2023-05-25 17:58:31,  66.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
