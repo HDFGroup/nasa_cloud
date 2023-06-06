@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <yaml.h>
+#include <math.h>
 
 #include "hdf5.h"
 
@@ -16,7 +17,7 @@
  * For now, the selection test can be made to use the regular HDF5 library by changing this to #undef, 
  * and unsetting the environment variables HDF5_PLUGIN_PATH and HDF5_VOL_CONNECTOR 
  */
-#define USE_REST_VOL
+#undef USE_REST_VOL
 
 #ifdef USE_REST_VOL
 #include "rest_vol_public.h"
@@ -100,12 +101,15 @@ typedef struct ConfigValues {
 	double max_lat;
 	double min_lon;
 	double max_lon;
+
+	int page_buf_size_exp;
 } ConfigValues;
 
 typedef enum ConfigType {
 	CONFIG_UNKNOWN_T,
 	CONFIG_STRING_T,
-	CONFIG_DOUBLE_T
+	CONFIG_DOUBLE_T,
+	CONFIG_INT_T
 } ConfigType;
 
 /* Copy each attribute from fin to the file whose hid_t is pointed to by fout_data */
@@ -327,6 +331,8 @@ herr_t copy_root_attrs(hid_t fin, hid_t fout) {
 Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	Range_Doubles out_range;
 
+	PRINT_DEBUG("Minmax search range is %ld - %ld\n", range.min, range.max)
+
 	/* Initialize fields */
 	out_range.min = arr[range.min];
 	out_range.max = arr[range.min];
@@ -334,11 +340,16 @@ Range_Doubles get_minmax(double arr[], Range_Indices range) {
 	for (size_t i = range.min; i < range.max; i++) {
 		double elem = arr[i];
 
-		if (elem < out_range.min)
+		if (elem < out_range.min) {
 			out_range.min = elem;
-		if (elem > out_range.max)
+		}
+	
+		if (elem > out_range.max) {
 			out_range.max = elem;
+		}
 	}
+
+	PRINT_DEBUG("Minmax values of array in the range are %lf, %lf\n", out_range.min, out_range.max)
 
 	return out_range;
 }
@@ -447,6 +458,18 @@ Range_Indices* get_index_range(hid_t fin, char* ground_track, BBox *bbox) {
 		FUNC_GOTO_ERROR("Failed to read from lat dataset")
 	}
 
+	/* Sanity check for testing */
+	/*
+	for (size_t i = 0; i < num_elems_lat; i++) {
+		if (lat_arr[i] != 0) {
+			break;
+		}
+
+		if (i == num_elems_lat - 1) {
+			FUNC_GOTO_ERROR("All lat elems read as zero!")
+		}
+	}
+	*/
 
 	char *lon_dset_name = malloc(strlen(ground_track) + strlen(geolocation_lon) + 1);
 	strncpy(lon_dset_name, ground_track, strlen(ground_track) + 1);
@@ -775,6 +798,15 @@ void process_layer(yaml_parser_t *parser, void *storage_location, ConfigType typ
 						PRINT_DEBUG("Key assigned value %lf\n", *((double*) storage_location))
 						break;
 					}
+					case CONFIG_INT_T: {
+						int intval = strtod((char *) value, NULL);
+
+						int *storage_loc = (int *) storage_location;
+						*storage_loc = intval;
+						PRINT_DEBUG("Key assigned value %d\n", *((int*) storage_location))
+
+						break;
+					}
 					default: {
 						void *next_storage_location = NULL;
 
@@ -808,9 +840,12 @@ void process_layer(yaml_parser_t *parser, void *storage_location, ConfigType typ
 						} else if (!strcmp("max_lon", value)) {
 							next_storage_location = (void*) &(config2->max_lon);
 							new_type = CONFIG_DOUBLE_T;
+						} else if (!strcmp("page_buf_size_exp", value)) {
+							next_storage_location = (void*) &(config2->page_buf_size_exp);
+							new_type = CONFIG_INT_T;
 						} else {
-							PRINT_DEBUG("Key name of %s not found\n", value)
-							FUNC_GOTO_ERROR("Invalid yaml option received")
+							PRINT_DEBUG("Key named %s not found, skipping\n", value)
+							break;
 						}
 
 						PRINT_DEBUG("%s%s\n", "Recursing in yaml parsing to assign key ", value)
@@ -905,10 +940,18 @@ int main(int argc, char **argv)
 		config->output_foldername = "/home/test_user1/";
 #endif
 
+	if (!strncmp(config->input_filename, "PAGE10MiB", strlen("PAGE10MiB"))) {
+		size_t page_buf_size = pow(2, config->page_buf_size_exp);
+
+		if (H5Pset_page_buffer_size(fapl_id, page_buf_size, 0, 0) < 0) {
+			FUNC_GOTO_ERROR("Failed to set page buffer size")
+		}
+
+	}
+
 	input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
-
 
 	if ((fin = H5Fopen(input_path, H5F_ACC_RDWR, H5P_DEFAULT)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Failed to open input file")
@@ -921,7 +964,6 @@ int main(int argc, char **argv)
 	if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Failed to create output file")
 	}
-
 
 	PRINT_DEBUG("Input filepath = %s%s\n", config->input_foldername, config->input_filename)
 	PRINT_DEBUG("Output filepath = %s%s\n", config->output_foldername, config->output_filename)
