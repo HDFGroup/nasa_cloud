@@ -238,11 +238,13 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 				}
 
 				/* If this group does not exist, attempt to create it */
-				if ((child_group = H5Gopen(parent_group, prev_group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
-					if ((child_group = H5Gcreate(parent_group, prev_group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
-						FUNC_GOTO_ERROR("Failed to create child group")
+				H5E_BEGIN_TRY {
+					if ((child_group = H5Gopen(parent_group, prev_group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+						if ((child_group = H5Gcreate(parent_group, prev_group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
+							FUNC_GOTO_ERROR("Failed to create child group")
+						}
 					}
-				}
+				} H5E_END_TRY
 
 				/* Only close intermediate groups that were just created, not the file itself */
 				if (parent_group != fout) {
@@ -939,7 +941,11 @@ int main(int argc, char **argv)
 	}
 
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
-	fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+    
+	if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) == H5I_INVALID_HID) {
+        FUNC_GOTO_ERROR("Failed to create FAPL")
+    }
+
 
 #ifdef USE_REST_VOL
 		H5rest_init();
@@ -947,16 +953,17 @@ int main(int argc, char **argv)
 		PRINT_DEBUG("== Using REST VOL == \n")
 #endif
 
+
+	H5FD_ros3_fapl_t param;
+
+	const char* aws_region = "us-west-2";
+
+	strcpy(param.aws_region, aws_region);
+
+	param.version = 1;
+	param.authenticate = 0;
+
 	if (use_ros3) {
-		H5FD_ros3_fapl_t param;
-
-		const char* aws_region = "us-west-2";
-
-		strcpy(param.aws_region, aws_region);
-
-		param.version = 1;
-		param.authenticate = 0;
-
 		if (H5Pset_fapl_ros3(fapl_id, &param) < 0) {
 				FUNC_GOTO_ERROR("Failed to set ros3 in FAPL")
 		}              
@@ -965,12 +972,14 @@ int main(int argc, char **argv)
 	config = malloc(sizeof(*config));
 	config = get_config_values(CONFIG_FILENAME, config);
 
+/*
 #ifdef USE_REST_VOL
 		free(config->input_foldername);
 		free(config->output_foldername);
 		config->input_foldername = "/home/test_user1/";
 		config->output_foldername = "/home/test_user1/";
 #endif
+*/
 
 	if (!strncmp(config->input_filename, "PAGE10MiB", strlen("PAGE10MiB"))) {
 		size_t page_buf_size = pow(2, config->page_buf_size_exp);
@@ -985,16 +994,23 @@ int main(int argc, char **argv)
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
 
-	if ((fin = H5Fopen(input_path, H5F_ACC_RDONLY, H5P_DEFAULT)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to open input file")
+	if (readonly) {
+		if ((fin = H5Fopen(input_path, H5F_ACC_RDONLY, fapl_id)) == H5I_INVALID_HID) {
+				FUNC_GOTO_ERROR("Failed to open input file")
+		}
+	} else {
+		if ((fin = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id)) == H5I_INVALID_HID) {
+				FUNC_GOTO_ERROR("Failed to open input file")
+		}
 	}
+
 
 	output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
 
 	if (!readonly) {
-		if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id)) == H5I_INVALID_HID) {
+		if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, H5P_DEFAULT)) == H5I_INVALID_HID) {
 			FUNC_GOTO_ERROR("Failed to create output file")
 		}
 
