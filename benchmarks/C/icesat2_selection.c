@@ -46,6 +46,9 @@
 
 bool debug = false;
 bool check_output = false;
+bool readonly = false;
+bool use_ros3 = false;
+bool use_rest_vol = false;
 
 char *ground_tracks[] = {"gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r", 0};
 
@@ -146,10 +149,6 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 		FUNC_GOTO_ERROR("Failed to get acpl")
 	}
 
-	if ((fout_attr = H5Acreate(fout, attr_name, dtype_id, dstype_id, acpl_id, H5P_DEFAULT)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to create attribute in output file")
-	}
-	
 	if ((dtype_size = H5Tget_size(dtype_id)) == 0) {
 		FUNC_GOTO_ERROR("Failed to get size of datatype")
 	}
@@ -166,16 +165,22 @@ herr_t copy_attr_callback(hid_t fin, const char* attr_name, const H5A_info_t *ai
 		FUNC_GOTO_ERROR("Failed to read from attribute")
 	}
 
-	if (H5Awrite(fout_attr, dtype_id, attr_data) < 0) {
-		FUNC_GOTO_ERROR("Failed to write to copied attribute")
+	if (!readonly) {
+		if ((fout_attr = H5Acreate(fout, attr_name, dtype_id, dstype_id, acpl_id, H5P_DEFAULT)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to create attribute in output file")
+		}
+
+		if (H5Awrite(fout_attr, dtype_id, attr_data) < 0) {
+			FUNC_GOTO_ERROR("Failed to write to copied attribute")
+		}
+
+		if (H5Aclose(fout_attr) < 0) {
+			FUNC_GOTO_ERROR("Failed to close output attribute")
+		}
 	}
 
 	free(attr_data);
-
-	if (H5Aclose(fout_attr) < 0) {
-		FUNC_GOTO_ERROR("Failed to close output attribute")
-	}
-
+	
 	if (H5Aclose(fin_attr) < 0) {
 		FUNC_GOTO_ERROR("Failed to close input attribute")
 	}
@@ -208,7 +213,6 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 
 	void *data = NULL;
 
-
 	/* Iterate over path to make sure all parent groups exist and get dset name */
 	while (*current_dset != 0) {
 		
@@ -224,34 +228,32 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		parent_group = fout;
 
 		/* Until end of path */
-		while(group_name != NULL) {
-			/* If the end of the path is reached, keep track of dset name and do not create it as a group*/
-			prev_group_name = group_name;
-			if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
-				dset_name = prev_group_name;
-				break;
-			}
+		if (!readonly) {
+			while(group_name != NULL) {
+				/* If the end of the path is reached, keep track of dset name and do not create it as a group*/
+				prev_group_name = group_name;
+				if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
+					dset_name = prev_group_name;
+					break;
+				}
 
-			/* If this group does not exist, attempt to create it */
-			H5E_BEGIN_TRY {
+				/* If this group does not exist, attempt to create it */
 				if ((child_group = H5Gopen(parent_group, prev_group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
 					if ((child_group = H5Gcreate(parent_group, prev_group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
-					FUNC_GOTO_ERROR("Failed to create child group")
+						FUNC_GOTO_ERROR("Failed to create child group")
 					}
 				}
-			} H5E_END_TRY
 
-			/* Only close intermediate groups that were just created, not the file itself */
-			if (parent_group != fout) {
-				if(H5Gclose(parent_group) < 0) {
-					FUNC_GOTO_ERROR("Failed to create group")
+				/* Only close intermediate groups that were just created, not the file itself */
+				if (parent_group != fout) {
+					if(H5Gclose(parent_group) < 0) {
+						FUNC_GOTO_ERROR("Failed to create group")
+					}
 				}
+				
+				parent_group = child_group;
+				
 			}
-			
-			parent_group = child_group;
-
-
-			
 		}
 
 		/* Access information about dset */
@@ -274,10 +276,6 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 		if ((dapl = H5Dget_access_plist(dset)) == H5I_INVALID_HID) {
 			FUNC_GOTO_ERROR("Failed to get dapl")
 		}
-
-		if ((copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
-			FUNC_GOTO_ERROR("Failed to create dset")
-		}
 		
 		if ((num_elems = H5Sget_simple_extent_npoints(dstype)) < 0) {
 			FUNC_GOTO_ERROR("Failed to get number of elements")
@@ -293,16 +291,22 @@ herr_t copy_scalar_datasets(hid_t fin, hid_t fout) {
 			FUNC_GOTO_ERROR("Failed to read dataset while copying scalar")
 		}
 
-		if (H5Dwrite(copied_scalar_dataset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
-			FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
+		if (!readonly) {
+			if ((copied_scalar_dataset = H5Dcreate(parent_group, dset_name, dtype, dstype, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
+				FUNC_GOTO_ERROR("Failed to create dset")
+			}
+
+			if (H5Dwrite(copied_scalar_dataset, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+				FUNC_GOTO_ERROR("Failed to write to dataset while copying scalar")
+			}
+
+			if (H5Dclose(copied_scalar_dataset) < 0) {
+				FUNC_GOTO_ERROR("Failed to close copied scalar dataset")
+			}
 		}
 
 		free(data);
-
-		if (H5Dclose(copied_scalar_dataset) < 0) {
-			FUNC_GOTO_ERROR("Failed to close copied scalar dataset")
-		}
-
+		
 		if (H5Dclose(dset) < 0) {
 			FUNC_GOTO_ERROR("Failed to close scalar dset")
 		}
@@ -547,36 +551,35 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	/* Separate filepath into groups */
 	group_name = strtok_r(dset_path, PATH_DELIMITER, &dset_path);
 
-	while(group_name != NULL) {
+	if (!readonly) {
+		while(group_name != NULL) {
 
-		// If the end of the path is reached, keep track of dset name and don't create it as a group
-		prev_group_name = group_name;
+			// If the end of the path is reached, keep track of dset name and don't create it as a group
+			prev_group_name = group_name;
 
-		if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
-			dset_name = prev_group_name;
-			break;
-		}
+			if ((group_name = strtok_r(NULL, PATH_DELIMITER, &dset_path)) == NULL) {
+				dset_name = prev_group_name;
+				break;
+			}
 
-		H5E_BEGIN_TRY {
-			if ((child_group = H5Gopen(parent_group, prev_group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
-				if ((child_group = H5Gcreate(parent_group, prev_group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
-				FUNC_GOTO_ERROR("Failed to create child group")
+			H5E_BEGIN_TRY {
+				if ((child_group = H5Gopen(parent_group, prev_group_name, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					if ((child_group = H5Gcreate(parent_group, prev_group_name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) == H5I_INVALID_HID) {
+					FUNC_GOTO_ERROR("Failed to create child group")
+					}
+				}
+			} H5E_END_TRY
+
+			// Only close intermediate groups that were just created, not the file itself
+			if (parent_group != fout) {
+				if (H5Gclose(parent_group) < 0) {
+					FUNC_GOTO_ERROR("Failed to close parent group")
 				}
 			}
-		} H5E_END_TRY
-
-		// Only close intermediate groups that were just created, not the file itself
-		if (parent_group != fout) {
-			if (H5Gclose(parent_group) < 0) {
-				FUNC_GOTO_ERROR("Failed to close parent group")
-			}
+			
+			parent_group = child_group;
 		}
-		
-		parent_group = child_group;
-
-
 	}
-
 
 	/* Copy the data in the source dataset to a new dataset*/
 
@@ -651,10 +654,6 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	//	FUNC_GOTO_ERROR("Failed to make layout contiguous")
 	//}
 
-	if ((copy_dset = H5Dcreate(parent_group, dset_name, dtype, memory_dataspace, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to create copy dset")
-	}
-
 	for (size_t i = 0; i < ndims; i++) {
 		total_num_elems *= dims[i];
 	}
@@ -676,11 +675,21 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 		FUNC_GOTO_ERROR("Failed to read from dset with hyperslab selection")
 	}
 
-	PRINT_DEBUG("Attempting to write to copy of %s\n", h5path)
+	if (!readonly) {
+		PRINT_DEBUG("Attempting to write to copy of %s\n", h5path)
+	
+		if ((copy_dset = H5Dcreate(parent_group, dset_name, dtype, memory_dataspace, H5P_DEFAULT, dcpl, dapl)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to create copy dset")
+		}
 
-	/* mem_space_id is H5S_ALL so that memory_dataspace is used for filespace and memory space */
-	if (H5Dwrite(copy_dset, native_dtype, H5S_ALL, memory_dataspace, H5P_DEFAULT, data) < 0) {
-		FUNC_GOTO_ERROR("Failed to write data when copying range")
+		/* mem_space_id is H5S_ALL so that memory_dataspace is used for filespace and memory space */
+		if (H5Dwrite(copy_dset, native_dtype, H5S_ALL, memory_dataspace, H5P_DEFAULT, data) < 0) {
+			FUNC_GOTO_ERROR("Failed to write data when copying range")
+		}
+
+		if (H5Dclose(copy_dset) < 0) {
+			FUNC_GOTO_ERROR("Failed to close copy dset")
+		}
 	}
 
 	free(start_arr);
@@ -688,10 +697,6 @@ void copy_dataset_range(hid_t fin, hid_t fout, char *h5path, Range_Indices *inde
 	free(block_size_arr);
 	free(data);
 	free(dims);
-
-	if (H5Dclose(copy_dset) < 0) {
-		FUNC_GOTO_ERROR("Failed to close copy dset")
-	}
 
 	if (H5Pclose(dcpl) < 0) {
 		FUNC_GOTO_ERROR("Failed to close dcpl")
@@ -919,6 +924,18 @@ int main(int argc, char **argv)
 		if (strcmp(argv[optind], "-debug") == 0) {
 			debug = true;
 		}
+		
+		if (strcmp(argv[optind], "-readonly") == 0) {
+			readonly = true;
+		}
+
+		if (strcmp(argv[optind], "-use_ros3") == 0) {
+			use_ros3 = true;
+		}
+	}
+
+	if (use_ros3 && !readonly) {
+		FUNC_GOTO_ERROR("ROS3 VFD requires -readonly")
 	}
 
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
@@ -929,6 +946,21 @@ int main(int argc, char **argv)
 		H5Pset_fapl_rest_vol(fapl_id);
 		PRINT_DEBUG("== Using REST VOL == \n")
 #endif
+
+	if (use_ros3) {
+		H5FD_ros3_fapl_t param;
+
+		const char* aws_region = "us-west-2";
+
+		strcpy(param.aws_region, aws_region);
+
+		param.version = 1;
+		param.authenticate = 0;
+
+		if (H5Pset_fapl_ros3(fapl_id, &param) < 0) {
+				FUNC_GOTO_ERROR("Failed to set ros3 in FAPL")
+		}              
+	}
 
 	config = malloc(sizeof(*config));
 	config = get_config_values(CONFIG_FILENAME, config);
@@ -953,7 +985,7 @@ int main(int argc, char **argv)
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
 
-	if ((fin = H5Fopen(input_path, H5F_ACC_RDWR, H5P_DEFAULT)) == H5I_INVALID_HID) {
+	if ((fin = H5Fopen(input_path, H5F_ACC_RDONLY, H5P_DEFAULT)) == H5I_INVALID_HID) {
 		FUNC_GOTO_ERROR("Failed to open input file")
 	}
 
@@ -961,12 +993,17 @@ int main(int argc, char **argv)
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
 
-	if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id)) == H5I_INVALID_HID) {
-		FUNC_GOTO_ERROR("Failed to create output file")
-	}
+	if (!readonly) {
+		if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to create output file")
+		}
 
+	}
+	
 	PRINT_DEBUG("Input filepath = %s%s\n", config->input_foldername, config->input_filename)
-	PRINT_DEBUG("Output filepath = %s%s\n", config->output_foldername, config->output_filename)
+	if (!readonly) {
+		PRINT_DEBUG("Output filepath = %s%s\n", config->output_foldername, config->output_filename)
+	}
 
 	double min_lon = config->min_lon;
 
@@ -1010,9 +1047,14 @@ int main(int argc, char **argv)
 	char **current_ground_track = ground_tracks;
 
 	while(*current_ground_track != 0) {
-		char *h5path;
-		hid_t attr_id;
-		hid_t group = H5Gcreate(fout, *current_ground_track, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+		char *h5path = NULL;
+		hid_t attr_id = H5I_INVALID_HID;
+		hid_t group = H5I_INVALID_HID;
+
+		if (!readonly) {
+			group = H5Gcreate(fout, *current_ground_track, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+		}
+		
 		Range_Indices *index_range = get_index_range(fin, *current_ground_track, &bbox);
 
 		if (index_range == NULL) {
@@ -1021,20 +1063,22 @@ int main(int argc, char **argv)
 			hid_t dspace = H5Screate_simple(1, (hsize_t[]){1}, NULL);
 			int bad_value = -1;
 
-			if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
-				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
-			}
+			if (!readonly) {
+				if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+					FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+				}
 
-			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
-				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
-			}
+				if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
+					FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+				}
 
-			if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
-				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
-			}
+				if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace, H5P_DEFAULT, H5P_DEFAULT))) {
+					FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+				}
 
-			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
-				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+				if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &bad_value)) {
+					FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+				}
 			}
 
 			/* Go to next iteration */
@@ -1046,23 +1090,23 @@ int main(int argc, char **argv)
 		PRINT_DEBUG("Got index_range (%zu, %zu)\n", index_range->min, index_range->max)
 
 		hid_t dspace_scalar = H5Screate(H5S_SCALAR);
+		if (!readonly) {
+			if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace_scalar, H5P_DEFAULT, H5P_DEFAULT))) {
+				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+			}
 
-		if (0 > (attr_id = H5Acreate(group, "index_range_min", H5T_NATIVE_INT, dspace_scalar, H5P_DEFAULT, H5P_DEFAULT))) {
-			FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->min))) {
+				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+			}
+
+			if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace_scalar, H5P_DEFAULT, H5P_DEFAULT))) {
+				FUNC_GOTO_ERROR("Failed to create attribute on no index range")
+			}
+
+			if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->max))) {
+				FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
+			}
 		}
-
-		if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->min))) {
-			FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
-		}
-
-		if (0 > (attr_id = H5Acreate(group, "index_range_max", H5T_NATIVE_INT, dspace_scalar, H5P_DEFAULT, H5P_DEFAULT))) {
-			FUNC_GOTO_ERROR("Failed to create attribute on no index range")
-		}
-
-		if (0 > H5Awrite(attr_id, H5T_NATIVE_INT, &(index_range->max))) {
-			FUNC_GOTO_ERROR("Failed to write to attribute on no index range")
-		}
-
 		/* Copy lat, lon, and photo count markers */
 
 		char **current_ref_path = reference_datasets;
@@ -1108,6 +1152,10 @@ int main(int argc, char **argv)
 			current_ref_path++;
 		}
 
+		if (!readonly) {
+			H5Gclose(group);
+		}
+
 		free(count_range);
 		free(index_range);
 		
@@ -1124,7 +1172,10 @@ int main(int argc, char **argv)
 	H5Pclose(fapl_id);
 	H5Pclose(fcpl_id);
 	H5Fclose(fin);
-	H5Fclose(fout);
+	
+	if (!readonly) {
+		H5Fclose(fout);
+	}
 	
 	free(input_path);
 	free(output_path);
