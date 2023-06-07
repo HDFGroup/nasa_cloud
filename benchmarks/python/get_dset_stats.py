@@ -86,6 +86,8 @@ def get_chunk_stats(dset):
     if library_has_chunk_iter:
         def init_chunktable_callback(chunk_info):
             # Use chunk offset as index 
+            nonlocal chunk_count
+            nonlocal allocated_bytes
             chunk_count += 1
             allocated_bytes +=  chunk_info[3]    
         dset.id.chunk_iter(init_chunktable_callback)
