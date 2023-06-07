@@ -1,0 +1,74 @@
+DEBUG> set default location for config dirs
+DEBUG> checking config path: ../config/config.yml
+DEBUG> _load_cfg with '../config/config.yml'
+DEBUG> got env value override for aws_region 
+DEBUG> got env value override for aws_access_key_id 
+DEBUG> got env value override for aws_secret_access_key 
+input_dirname: [../../../../mybuckets/hdf5/data/ICESat2/]
+name, logical_bytes, chunk_size, chunk_count, allocated_bytes
+/gt1l/geolocation/reference_photon_lat, 1448120, 80000, 19, 1070290
+/gt1l/geolocation/reference_photon_lon, 1448120, 80000, 19, 962664
+/gt1l/geolocation/segment_ph_cnt, 724060, 40000, 19, 138290
+/gt1l/geolocation/segment_ph_cnt, 724060, 40000, 19, 138290
+/gt1l/heights/dist_ph_along, 79166576, 40000, 1980, 70358541
+/gt1l/heights/h_ph, 79166576, 40000, 1980, 65362493
+/gt1l/heights/signal_conf_ph, 98958220, 50000, 1980, 2562587
+/gt1l/heights/quality_ph, 19791644, 10000, 1980, 170489
+/gt1l/heights/lat_ph, 158333152, 80000, 1980, 95398057
+/gt1l/heights/lon_ph, 158333152, 80000, 1980, 93690268
+/gt1l/heights/delta_time, 158333152, 80000, 1980, 13557513
+/gt1r/geolocation/reference_photon_lat, 1448120, 80000, 19, 1070239
+/gt1r/geolocation/reference_photon_lon, 1448120, 80000, 19, 961265
+/gt1r/geolocation/segment_ph_cnt, 724060, 40000, 19, 167366
+/gt1r/geolocation/segment_ph_cnt, 724060, 40000, 19, 167366
+/gt1r/heights/dist_ph_along, 138663412, 40000, 3467, 123759909
+/gt1r/heights/h_ph, 138663412, 40000, 3467, 111233882
+/gt1r/heights/signal_conf_ph, 173329265, 50000, 3467, 5141707
+/gt1r/heights/quality_ph, 34665853, 10000, 3467, 165157
+/gt1r/heights/lat_ph, 277326824, 80000, 3467, 168220755
+/gt1r/heights/lon_ph, 277326824, 80000, 3467, 156770700
+/gt1r/heights/delta_time, 277326824, 80000, 3467, 17533381
+/gt2l/geolocation/reference_photon_lat, 1448120, 80000, 19, 1070535
+/gt2l/geolocation/reference_photon_lon, 1448120, 80000, 19, 964615
+/gt2l/geolocation/segment_ph_cnt, 724060, 40000, 19, 141563
+/gt2l/geolocation/segment_ph_cnt, 724060, 40000, 19, 141563
+/gt2l/heights/dist_ph_along, 82490204, 40000, 2063, 73166764
+/gt2l/heights/h_ph, 82490204, 40000, 2063, 68154776
+/gt2l/heights/signal_conf_ph, 103112755, 50000, 2063, 2596624
+/gt2l/heights/quality_ph, 20622551, 10000, 2063, 168054
+/gt2l/heights/lat_ph, 164980408, 80000, 2063, 96444947
+/gt2l/heights/lon_ph, 164980408, 80000, 2063, 101333786
+/gt2l/heights/delta_time, 164980408, 80000, 2063, 13741224
+/gt2r/geolocation/reference_photon_lat, 1448120, 80000, 19, 1070283
+/gt2r/geolocation/reference_photon_lon, 1448120, 80000, 19, 961964
+/gt2r/geolocation/segment_ph_cnt, 724060, 40000, 19, 164448
+/gt2r/geolocation/segment_ph_cnt, 724060, 40000, 19, 164448
+/gt2r/heights/dist_ph_along, 115282592, 40000, 2883, 102670115
+/gt2r/heights/h_ph, 115282592, 40000, 2883, 92817923
+/gt2r/heights/signal_conf_ph, 144103240, 50000, 2883, 4242731
+/gt2r/heights/quality_ph, 28820648, 10000, 2883, 127994
+/gt2r/heights/lat_ph, 230565184, 80000, 2883, 140182292
+/gt2r/heights/lon_ph, 230565184, 80000, 2883, 139208131
+/gt2r/heights/delta_time, 230565184, 80000, 2883, 16976061
+/gt3l/geolocation/reference_photon_lat, 1448120, 80000, 19, 1071089
+/gt3l/geolocation/reference_photon_lon, 1448120, 80000, 19, 964926
+/gt3l/geolocation/segment_ph_cnt, 724060, 40000, 19, 138599
+/gt3l/geolocation/segment_ph_cnt, 724060, 40000, 19, 138599
+/gt3l/heights/dist_ph_along, 76734796, 40000, 1919, 67935895
+/gt3l/heights/h_ph, 76734796, 40000, 1919, 63396111
+/gt3l/heights/signal_conf_ph, 95918495, 50000, 1919, 2380940
+/gt3l/heights/quality_ph, 19183699, 10000, 1919, 123073
+/gt3l/heights/lat_ph, 153469592, 80000, 1919, 90328269
+/gt3l/heights/lon_ph, 153469592, 80000, 1919, 97219646
+/gt3l/heights/delta_time, 153469592, 80000, 1919, 13500636
+/gt3r/geolocation/reference_photon_lat, 1448120, 80000, 19, 1070762
+/gt3r/geolocation/reference_photon_lon, 1448120, 80000, 19, 961915
+/gt3r/geolocation/segment_ph_cnt, 724060, 40000, 19, 169726
+/gt3r/geolocation/segment_ph_cnt, 724060, 40000, 19, 169726
+/gt3r/heights/dist_ph_along, 146487296, 40000, 3663, 129573077
+/gt3r/heights/h_ph, 146487296, 40000, 3663, 117750772
+/gt3r/heights/signal_conf_ph, 183109120, 50000, 3663, 5189283
+/gt3r/heights/quality_ph, 36621824, 10000, 3663, 137040
+/gt3r/heights/lat_ph, 292974592, 80000, 3663, 176620572
+/gt3r/heights/lon_ph, 292974592, 80000, 3663, 181462699
+/gt3r/heights/delta_time, 292974592, 80000, 3663, 17799472

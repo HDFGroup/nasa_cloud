@@ -1,3 +1,5 @@
-start,	finish,	elapsed,	machine, options, source, target
-2023-04-18 08:21:04,	2023-04-18 08:45:26,	1462,	m5.4xlarge,	--link, s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/linked
-2023-04-19 11:21:53,  2023-04-19 12:10:59,      2946,   m5.4xlarge, , s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/
+start,	finish,	elapsed,	machine, options, source, target, notes
+2023-04-18 08:21:04,  2023-04-18 08:45:26,	 1462,	m5.4xlarge,	--link, s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/linked
+2023-04-19 11:21:53,  2023-04-19 12:10:59,   2946,   m5.4xlarge, , s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/
+2023-06-07 12:43:12,  2023-06-07 12:48:29,   1483,   m5.4xlarge, , s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/linked_chunkiter
+2023-06-07 13:43:12,  2023-06-07 13:68:29,   1185,   m5.4xlarge, , s3://hdf5.sample/data/NASA/ICESat2/ATL03_20181017222812_02950102_005_01.h5, hdf5://home/test_user1/icesat2/fastlink
