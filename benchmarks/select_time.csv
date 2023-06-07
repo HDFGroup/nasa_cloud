@@ -36,6 +36,10 @@ run_number, start,	finish,	benchmark, elapsed (sec), machine,    input_folder,  
 2, , , C (ros3 read-only), 50.4, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 1, , , C (ros3 read-only), 88.7, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 2, , , C (ros3 read-only), 75.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (ros3), 56.2, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD
+2, , , C (ros3), 51.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD
+1, , , C (ros3), 98.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD/writing also paged
+2, , , C (ros3), 78.8, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD/ writing also paged
 1, , , C (REST VOL read-only), 24.7, m5.4xlarge, /home/test_user1/icesat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 2, , , C (REST VOL read-only), 1.9, m5.4xlarge, /home/test_user1/icesat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 1, , , C (REST VOL read-only), 54.9, m5.4xlarge, /home/test_user1/icesat2/linked/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,

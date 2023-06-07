@@ -911,6 +911,7 @@ int main(int argc, char **argv)
 {
 
 	hid_t fapl_id = H5I_INVALID_HID;
+	hid_t fapl_id2 = H5I_INVALID_HID;
 	hid_t fcpl_id = H5I_INVALID_HID;
 	hid_t fin = H5I_INVALID_HID;
 	hid_t fout = H5I_INVALID_HID;
@@ -936,16 +937,15 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (use_ros3 && !readonly) {
-		FUNC_GOTO_ERROR("ROS3 VFD requires -readonly")
-	}
-
 	fcpl_id = H5Pcreate(H5P_FILE_CREATE);
     
 	if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) == H5I_INVALID_HID) {
         FUNC_GOTO_ERROR("Failed to create FAPL")
     }
 
+	if ((fapl_id2 = H5Pcreate(H5P_FILE_ACCESS)) == H5I_INVALID_HID) {
+		FUNC_GOTO_ERROR("Failed to create FAPL2")
+	}
 
 #ifdef USE_REST_VOL
 		H5rest_init();
@@ -988,29 +988,31 @@ int main(int argc, char **argv)
 			FUNC_GOTO_ERROR("Failed to set page buffer size")
 		}
 
+        if (!readonly) {
+			if (H5Pset_page_buffer_size(fapl_id2, page_buf_size, 0, 0) < 0) {
+				FUNC_GOTO_ERROR("Failed to set page buffer size")
+			}
+
+			if (H5Pset_file_space_strategy(fcpl_id, H5F_FSPACE_STRATEGY_PAGE, 0, 0) < 0) {
+				FUNC_GOTO_ERROR("Failed to set page strategy for output file")
+			}
+		}
 	}
 
 	input_path = malloc(strlen(config->input_filename) + strlen(config->input_foldername) + 1);
 	strcpy(input_path, config->input_foldername);
 	strcat(input_path, config->input_filename);
 
-	if (readonly) {
-		if ((fin = H5Fopen(input_path, H5F_ACC_RDONLY, fapl_id)) == H5I_INVALID_HID) {
-				FUNC_GOTO_ERROR("Failed to open input file")
-		}
-	} else {
-		if ((fin = H5Fopen(input_path, H5F_ACC_RDWR, fapl_id)) == H5I_INVALID_HID) {
-				FUNC_GOTO_ERROR("Failed to open input file")
-		}
+	if ((fin = H5Fopen(input_path, H5F_ACC_RDONLY, fapl_id)) == H5I_INVALID_HID) {
+			FUNC_GOTO_ERROR("Failed to open input file")
 	}
-
 
 	output_path = malloc(strlen(config->output_filename) + strlen(config->output_foldername) + 1);
 	strcpy(output_path, config->output_foldername);
 	strcat(output_path, config->output_filename);
 
 	if (!readonly) {
-		if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, H5P_DEFAULT)) == H5I_INVALID_HID) {
+		if ((fout = H5Fcreate(output_path, H5F_ACC_TRUNC, fcpl_id, fapl_id2)) == H5I_INVALID_HID) {
 			FUNC_GOTO_ERROR("Failed to create output file")
 		}
 
@@ -1186,6 +1188,7 @@ int main(int argc, char **argv)
 #endif
 
 	H5Pclose(fapl_id);
+	H5Pclose(fapl_id2);
 	H5Pclose(fcpl_id);
 	H5Fclose(fin);
 	
