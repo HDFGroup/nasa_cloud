@@ -1,34 +1,50 @@
-run_number, start,	finish,	elapsed (sec),	machine,    input_folder,   output_folder,  filename,   node_count, rg_hit, rg_miss, data_cache_max_req_size, data_cache_size, data_cache_page_size, notes
-1, 2023-04-18 12:00:48, 2023-04-18 12:00:48,  0.7, m5.4xlarge, ../../data/, ../../out/,    ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-1, 2023-04-18 12:24:16, 2023-04-18 12:24:53,  36.7, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , this was run with the S3 cache already warmed
-1, 2023-04-18 12:35:52, 2023-04-18 12:36:58,  65.2, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-1, 2023-04-18 13:02:40, 2023-04-18 13:03:16,  35.9, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 602, 1858, 128k, 128m, 4m,
-2, 2023-04-18 13:18:54, 2023-04-18 13:19:01,   6.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
-3, 2023-04-18 13:25:41, 2023-04-18 13:25:48,   6.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
-1, 2023-04-19 13:39.36, 2023-04-19 13:39:56,  19.3, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
-2, 2023-04-19 13:42:55, 2023-04-19 13:42:59,   4.8, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
-3, 2023-04-19 13:44:30, 2023-04-19 13:44:35,   4.5, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
-1, 2023-04-19 13:49:49, 2023-04-19 13:50:26,  37.7, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
-2, 2023-04-19 13:53:40, 2023-04-19 13:53:47,   7.4, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
-3, 2023-04-19 13:55:12, 2023-04-19 13:55:19,   6.8, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
-1, 2023-04-19 14:41:30, 2023-04-19 14:42:13,  42.9, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 822, 1629, 128k, 128m, 16m, 
-1, 2023-05-04 12:30:30, 2023-05-04 12:31:43,  73.7, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ATL03_20181017222812_02950102_005_01.h5, , , , , , , , 
-1, 2023-05-17 09:51:10, 2023-05-17 09:51:57,  46.9, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-2, 2023-05-17 09:55:20, 2023-05-17 09:55:55,  34.8, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-3, 2023-05-17 09:57:00, 2023-05-17 09:57:29,  29.6, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-1, 2023-05-17 19:21:50, 2023-05-17 19:21:51,   1.1, m5.4xlarge, ../../../../data/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
-1, 2023-05-17 19:23:08, 2023-05-17 19:23:09,   1.1, m5.4xlarge, ../../../../data/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-1, 2023-05-17 19:27:57, 2023-05-17 19:29:00,  63.3, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-1, 2023-05-17 19:29:57, 2023-05-17 19:31:00,  62.2, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
-1, 2023-05-17 19:32:05, 2023-05-17 19:33:09,  64.5, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-1, 2023-05-17 19:34:06, 2023-05-17 19:34:58,  51.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
-1, 2023-05-17 19:39:48, 2023-05-17 19:40:34,  45.9, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-1, 2023-05-17 19:43:00, 2023-05-17 19:43:34,  34.4, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-1, 2023-05-17 19:57:22, 2023-05-17 19:57:41,  18.8, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-2, 2023-05-17 20:01:25, 2023-05-17 20:01:28,   3.3, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
-3, 2023-05-17 20:02:37, 2023-05-17 20:02:39,   2.9, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-1, 2023-05-17 20:05:19, 2023-05-17 20:06:10,  51.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-2, 2023-05-17 20:08:15, 2023-05-17 20:08:21,   5.5, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-3, 2023-05-17 20:09:13, 2023-05-17 20:09:18,   5.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
-1, 2023-05-25 17:53:51, 2023-05-25 17:54:54,  62.5, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
-1, 2023-05-25 17:57:24, 2023-05-25 17:58:31,  66.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
+run_number, start,	finish,	benchmark, elapsed (sec), machine,    input_folder,   output_folder,  filename,   node_count, rg_hit, rg_miss, data_cache_max_req_size, data_cache_size, data_cache_page_size, notes
+1, 2023-04-18 12:00:48, 2023-04-18 12:00:48, Python, 0.7, m5.4xlarge, ../../data/, ../../out/,    ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-04-18 12:24:16, 2023-04-18 12:24:53, Python, 36.7, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , this was run with the S3 cache already warmed
+1, 2023-04-18 12:35:52, 2023-04-18 12:36:58, Python, 65.2, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-04-18 13:02:40, 2023-04-18 13:03:16, Python, 35.9, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 602, 1858, 128k, 128m, 4m,
+2, 2023-04-18 13:18:54, 2023-04-18 13:19:01, Python,  6.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
+3, 2023-04-18 13:25:41, 2023-04-18 13:25:48, Python,  6.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
+1, 2023-04-19 13:39.36, 2023-04-19 13:39:56, Python, 19.3, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
+2, 2023-04-19 13:42:55, 2023-04-19 13:42:59, Python,  4.8, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
+3, 2023-04-19 13:44:30, 2023-04-19 13:44:35, Python,  4.5, m5.4xlarge, hdf5://home/test_user1/icesat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 4m, 
+1, 2023-04-19 13:49:49, 2023-04-19 13:50:26, Python, 37.7, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
+2, 2023-04-19 13:53:40, 2023-04-19 13:53:47, Python,  7.4, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
+3, 2023-04-19 13:55:12, 2023-04-19 13:55:19, Python,  6.8, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 0, 0, 128k, 128m, 0, 
+1, 2023-04-19 14:41:30, 2023-04-19 14:42:13, Python, 42.9, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ../../out/, ATL03_20181017222812_02950102_005_01.h5, 4, 822, 1629, 128k, 128m, 16m, 
+1, 2023-05-04 12:30:30, 2023-05-04 12:31:43, Python, 73.7, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ATL03_20181017222812_02950102_005_01.h5, , , , , , , , 
+1, 2023-05-17 09:51:10, 2023-05-17 09:51:57, Python, 46.9, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+2, 2023-05-17 09:55:20, 2023-05-17 09:55:55, Python, 34.8, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+3, 2023-05-17 09:57:00, 2023-05-17 09:57:29, Python, 29.6, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ../../out/, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-05-17 19:21:50, 2023-05-17 19:21:51, Python,  1.1, m5.4xlarge, ../../../../data/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
+1, 2023-05-17 19:23:08, 2023-05-17 19:23:09, Python,  1.1, m5.4xlarge, ../../../../data/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+1, 2023-05-17 19:27:57, 2023-05-17 19:29:00, Python, 63.3, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+1, 2023-05-17 19:29:57, 2023-05-17 19:31:00, Python, 62.2, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
+1, 2023-05-17 19:32:05, 2023-05-17 19:33:09, Python, 64.5, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+1, 2023-05-17 19:34:06, 2023-05-17 19:34:58, Python, 51.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 24
+1, 2023-05-17 19:39:48, 2023-05-17 19:40:34, Python, 45.9, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+1, 2023-05-17 19:43:00, 2023-05-17 19:43:34, Python, 34.4, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+1, 2023-05-17 19:57:22, 2023-05-17 19:57:41, Python, 18.8, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+2, 2023-05-17 20:01:25, 2023-05-17 20:01:28, Python,  3.3, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , , 
+3, 2023-05-17 20:02:37, 2023-05-17 20:02:39, Python,  2.9, m5.4xlarge, hdf5://home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-05-17 20:05:19, 2023-05-17 20:06:10, Python, 51.3, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+2, 2023-05-17 20:08:15, 2023-05-17 20:08:21, Python,  5.5, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+3, 2023-05-17 20:09:13, 2023-05-17 20:09:18, Python,  5.2, m5.4xlarge, hdf5://home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5,    , , , , , ,
+1, 2023-05-25 17:53:51, 2023-05-25 17:54:54, Python, 62.5, m5.4xlarge, s3://hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
+1, 2023-05-25 17:57:24, 2023-05-25 17:58:31, Python, 66.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5,    , , , , , , page_buf_size_exp: 32
+1, , , C (ros3 read-only), 73.3, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (ros3 read-only), 50.4, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (ros3 read-only), 88.7, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (ros3 read-only), 75.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, N/A, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (ros3), 56.2, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD
+2, , , C (ros3), 51.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD
+1, , , C (ros3), 98.6, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD/writing also paged
+2, , , C (ros3), 78.8, m5.4xlarge, http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/, ./, PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5, , , , , , , writing done with standard VFD/ writing also paged
+1, , , C (REST VOL read-only), 24.7, m5.4xlarge, /home/test_user1/icesat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL read-only), 1.9, m5.4xlarge, /home/test_user1/icesat2/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (REST VOL read-only), 54.9, m5.4xlarge, /home/test_user1/icesat2/linked/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL read-only), 4.1, m5.4xlarge, /home/test_user1/icesat2/linked/, N/A, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (REST VOL), 28.5, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL), 7.6, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (REST VOL), 59.6, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL), 9.9, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , 
