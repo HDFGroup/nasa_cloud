@@ -98,7 +98,7 @@ def get_chunk_stats(dset):
 
         for i in range(chunk_count):
             chunk_info = dset.id.get_chunk_info(i, spaceid)
-            allocated_bytes += chunk_info[3]\
+            allocated_bytes += chunk_info[3]
             
     return (chunk_count, allocated_bytes)
              
