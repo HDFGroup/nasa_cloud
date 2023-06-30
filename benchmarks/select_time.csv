@@ -47,4 +47,10 @@ run_number, start,	finish,	benchmark, elapsed (sec), machine,    input_folder,  
 1, , , C (REST VOL), 28.5, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 2, , , C (REST VOL), 7.6, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
 1, , , C (REST VOL), 59.6, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
-2, , , C (REST VOL), 9.9, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , , 
+2, , , C (REST VOL), 9.9, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (REST VOL Multi read/write), 16.8, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL Multi read/write), 7.2, m5.4xlarge, /home/test_user1/icesat2/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+1, , , C (REST VOL Multi read/write), 31.8, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+2, , , C (REST VOL Multi read/write), 9.9, m5.4xlarge, /home/test_user1/icesat2/linked/, ./, ATL03_20181017222812_02950102_005_01.h5, , , , , , ,
+
+
