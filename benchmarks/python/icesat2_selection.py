@@ -134,7 +134,7 @@ def copy_dataset_range(fin, fout, h5path, index_range):
     dset_src = fin[h5path]
     parts = h5path.split("/")
     dset_name = parts[-1]
-    extent = index_range.max - index_range.min
+    extent = int(index_range.max - index_range.min)
     logging.info(f"creating dataset {dset_name} with extent {extent}")
     grp = fout
     for i in range(len(parts) - 1):
