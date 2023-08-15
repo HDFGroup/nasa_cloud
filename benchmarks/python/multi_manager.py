@@ -126,7 +126,6 @@ class MultiManager():
         count = min(len(self._objs), len(selections), len(values))
         for i in range(count):
             dset = self._objs[i]
-            print(dset.name)
             selection = selections[i]
             value = values[i]
             dset.__setitem__(selection, value)
