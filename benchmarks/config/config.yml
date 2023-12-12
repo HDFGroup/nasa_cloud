@@ -4,17 +4,17 @@ logfile: null
 machine: m5.4xlarge
 #input_foldername: ../../../../data/
 #input_foldername: ../../../../mybuckets/hdf5/data/ICESat2/
-#input_foldername: s3://hdf5.sample/data/NASA/ICESat2/
-input_foldername: hdf5://home/test_user1/icesat2/
+input_foldername: s3://hdf5.sample/data/NASA/ICESat2/
+#input_foldername: hdf5://home/test_user1/icesat2/
 #input_foldername: hdf5://home/test_user1/icesat2/linked/
-#input_foldername: http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/
+input_foldername: http://s3.us-west-2.amazonaws.com/hdf5.sample/data/NASA/ICESat2/
 page_buf_size_exp: 24
 #page_buf_size_exp: 0 
 aws_region: us-west-2
 aws_access_key_id: ""
 aws_secret_access_key: ""
-input_filename: ATL03_20181017222812_02950102_005_01.h5
-#input_filename: PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5
+#input_filename: ATL03_20181017222812_02950102_005_01.h5
+input_filename: PAGE10MiB_ATL03_20181017222812_02950102_005_01.h5
 #output_foldername: "./"
 output_foldername: "hdf5://home/test_user1/icesat2/"
 output_filename: atl_data.h5
@@ -30,5 +30,11 @@ min_lat: 27.0
 max_lat: 28.0  
 min_lon: -108.0
 max_lon: -107.0
+
+# settings for nrel_selection.py
+nrel_foldername: hdf5://home/test_user1/nrel/
+#nrel_filename: nsrdb_2000_windspeed.h5
+nrel_filename: nsrdb_2000_windspeed_link.h5
+nrel_h5path: wind_speed
 # end config
 

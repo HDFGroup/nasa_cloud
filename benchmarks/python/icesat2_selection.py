@@ -234,12 +234,12 @@ logging.basicConfig(filename=logfname, format='%(levelname)s %(asctime)s %(messa
 logging.debug(f"set log_level to {loglevel}")
 
 input_dirname = config.get("input_foldername")
-print(f"input_dirname: [{input_dirname}]")
 if not input_dirname or input_dirname[-1] != '/':
     sys.exit("expected input_foldername to end with '/'")
 input_filename = config.get("input_filename")
 input_filepath = f"{input_dirname}{input_filename}"
 logging.info(f"input filepath: {input_filepath}")
+print(f"input filepath: {input_filepath}")
 output_dirname = config.get("output_foldername")
 page_buf_size_exp = 0
 if input_filename.startswith("PAGE10MiB"):
@@ -282,7 +282,6 @@ logging.info(f"lat range: {bbox.min_lat:.4f} - {bbox.max_lat:.4f}")
 logging.info(f"lon range: {bbox.min_lon:.4f} - {bbox.max_lon:.4f}")
 
 start_time = time.time()
-dt = datetime.fromtimestamp(start_time)
 
 with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=page_buf_size) as fout:
     copy_root_attrs(fin, fout)
