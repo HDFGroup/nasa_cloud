@@ -33,6 +33,8 @@ geolocation_lon = "/geolocation/reference_photon_lon"
 BBox = namedtuple("BBox", "min_lon max_lon min_lat max_lat")
 Range = namedtuple("Range", "min max")
 
+use_mm = True
+
 # copy any attributes from input root group to output root
 def copy_root_attrs(fin, fout):
     for k in fin.attrs:
@@ -42,6 +44,8 @@ def copy_root_attrs(fin, fout):
 
 # copy scalar datasets
 def copy_scalar_datasets(fin, fout):
+    dsets_out = []
+
     for h5path in scalar_datasets:
         dset = fin[h5path]
         data = dset[...]
@@ -54,7 +58,19 @@ def copy_scalar_datasets(fin, fout):
             if grp_name not in grp:
                 grp.create_group(grp_name)
             grp = grp[grp_name]
-        grp.create_dataset(parts[-1], data=data)
+        if use_mm:
+            # create datasets individually with no data, write collectively later
+            d = grp.create_dataset(parts[-1], shape=data.shape, dtype=data.dtype)
+            dsets_out.append(d)
+        else:
+            grp.create_dataset(parts[-1], data=data)
+
+    if use_mm:
+        dsets_in = [fin[h5path] for h5path in scalar_datasets]
+        mm_in = h5pyd.MultiManager(dsets_in)
+        mm_out = h5pyd.MultiManager(dsets_out)
+        mm_out[...] = mm_in[...]
+
 
 # get minmax values for array and given range
 def get_minmax(arr, range):
@@ -87,15 +103,15 @@ def get_range(lat_arr, lon_arr, bbox, index_range=None):
         return None
     if lon_range.max < bbox.min_lon:
         return None
-    
+
     # if entirely in bbox, return current range
     if lat_range.min >= bbox.min_lat:
         if lat_range.max <= bbox.max_lat:
             if lon_range.min >= bbox.min_lon:
                 if lon_range.max <= bbox.max_lon:
                     logging.debug('return inside bbox')
-                    return index_range 
-    
+                    return index_range
+
     mid_index = (index_range.min + index_range.max) // 2
     range_low =  get_range(lat_arr, lon_arr, bbox, index_range=Range(index_range.min, mid_index))
     range_high = get_range(lat_arr, lon_arr, bbox, index_range=Range(mid_index, index_range.max))
@@ -108,63 +124,109 @@ def get_range(lat_arr, lon_arr, bbox, index_range=None):
     # concatenate the two ranges
     logging.debug("return range concat")
     return Range(range_low.min, range_high.max)
-    
 
 # get min max index for the given lat/lon bounds
-def get_index_range(fin, ground_track, bbox):
-    logging.debug(f"get_index_range ground_track: {ground_track}")
-    rp_lat = fin[f"{ground_track}/geolocation/reference_photon_lat"]
-    rp_lat_arr = rp_lat[:]
-    rp_lon = fin[f"{ground_track}/geolocation/reference_photon_lon"]
-    rp_lon_arr = rp_lon[:]
-    
-    index_range = get_range(rp_lat_arr, rp_lon_arr, bbox)
-    logging.debug("get_index_range, using index: {index_range}")
-    if index_range:
-        arr = rp_lat_arr[index_range[0]:index_range[1]]
-        logging.debug(f"lat arr min: {arr.min():.2f} max: {arr.max():.2f}")
-        rp_lon = fin[f"{ground_track}/geolocation/reference_photon_lon"]
-        rp_lon_arr = rp_lon[index_range[0]:index_range[1]]
-        logging.debug(f"lon arr min: {rp_lon_arr.min():.2f} max: {rp_lon_arr.max():.2f}")
-        
-    return index_range
+def get_index_ranges(fin, ground_tracks, bbox):
+    logging.debug(f"get_index_range ground_tracks: {ground_tracks}")
+    index_ranges = []
 
-# copy given index range from source dataset to destination dataset
-def copy_dataset_range(fin, fout, h5path, index_range):
-    dset_src = fin[h5path]
-    parts = h5path.split("/")
-    dset_name = parts[-1]
-    extent = int(index_range.max - index_range.min)
-    logging.info(f"creating dataset {dset_name} with extent {extent}")
-    grp = fout
-    for i in range(len(parts) - 1):
-        if not parts[i]:
-            continue
-        grp_name = parts[i]
-        if grp_name not in grp:
-            grp.create_group(grp_name)
-        grp = grp[grp_name]
-    dt = dset_src.dtype
-    # create the dataset
-    shape = [extent,]
-    # for multidimensional datasets, copy the remaing dimensions
-    for n in dset_src.shape[1:]:
-        shape.append(n)
-    dset_des = grp.create_dataset(dset_name, dtype=dt, shape=shape)
-    # copy data
-    # TBD - paginate
-    arr = dset_src[index_range.min:index_range.max]
-    dset_des[:] = arr[:]
+    if use_mm:
+        rp_lats = [fin[f"{ground_track}/geolocation/reference_photon_lat"] for ground_track in ground_tracks]
+        rp_lons = [fin[f"{ground_track}/geolocation/reference_photon_lon"] for ground_track in ground_tracks]
 
-# sum up all the elements from 0 to index
-def get_photon_count_range(fin, h5path, index_range):
-    dset = fin[h5path]
-    arr = dset[0:index_range.max]
-    sum_base = np.sum(arr[0:index_range.min])
-    sum_inc = np.sum(arr[index_range.min:index_range.max])
-    sum_range = Range(sum_base, sum_base+sum_inc)
-    logging.info(f"got photon count range {h5path} for {index_range} of {sum_range}")
-    return sum_range
+        mm_lats = h5pyd.MultiManager(rp_lats)
+        mm_lons = h5pyd.MultiManager(rp_lons)
+
+        rp_lat_arrs = mm_lats[...]
+        rp_lon_arrs = mm_lons[...]
+
+        index_ranges = [get_range(rp_lat_arrs[i], rp_lon_arrs[i], bbox) for i in range(len(ground_tracks))]
+    else:
+        for ground_track in ground_tracks:
+            rp_lat = fin[f"{ground_track}/geolocation/reference_photon_lat"]
+            rp_lat_arr = rp_lat[:]
+            rp_lon = fin[f"{ground_track}/geolocation/reference_photon_lon"]
+            rp_lon_arr = rp_lon[:]
+
+            index_range = get_range(rp_lat_arr, rp_lon_arr, bbox)
+            index_ranges.append(index_range)
+            logging.debug("get_index_range, using index: {index_range}")
+            if index_range:
+                arr = rp_lat_arr[index_range[0]:index_range[1]]
+                logging.debug(f"lat arr min: {arr.min():.2f} max: {arr.max():.2f}")
+                rp_lon = fin[f"{ground_track}/geolocation/reference_photon_lon"]
+                rp_lon_arr = rp_lon[index_range[0]:index_range[1]]
+                logging.debug(f"lon arr min: {rp_lon_arr.min():.2f} max: {rp_lon_arr.max():.2f}")
+
+    return index_ranges
+
+# copy given index range from each source dataset to destination dataset
+def copy_dataset_ranges(fin, fout, h5paths, index_ranges):
+    dsets_in = []
+    dsets_out = []
+
+    for h5path, index_range in zip(h5paths, index_ranges):
+        dset_src = fin[h5path]
+        parts = h5path.split("/")
+        dset_name = parts[-1]
+        extent = int(index_range.max - index_range.min)
+        logging.info(f"creating dataset {dset_name} with extent {extent}")
+        grp = fout
+        for i in range(len(parts) - 1):
+            if not parts[i]:
+                continue
+            grp_name = parts[i]
+            if grp_name not in grp:
+                grp.create_group(grp_name)
+            grp = grp[grp_name]
+        dt = dset_src.dtype
+        # create the dataset
+        shape = [extent,]
+        # for multidimensional datasets, copy the remaing dimensions
+        for n in dset_src.shape[1:]:
+            shape.append(n)
+        dset_des = grp.create_dataset(dset_name, dtype=dt, shape=shape)
+        # copy data
+        # TBD - paginate
+        if use_mm:
+            dsets_in.append(dset_src)
+            dsets_out.append(dset_des)
+        else:
+            arr = dset_src[index_range.min:index_range.max]
+            dset_des[:] = arr[:]
+
+    if use_mm:
+        mm_in = h5pyd.MultiManager(dsets_in)
+        mm_out = h5pyd.MultiManager(dsets_out)
+        mm_out[...] = mm_in[...]
+
+# sum up all the elements from 0 to index in each dataset
+def get_photon_count_ranges(fin, h5paths, index_ranges):
+    sum_ranges = []
+    dsets_in = []
+
+    for h5path, index_range in zip(h5paths, index_ranges):
+        dset = fin[h5path]
+        if use_mm:
+            dsets_in.append(dset)
+        else:
+            arr = dset[0:index_range.max]
+            sum_base = np.sum(arr[0:index_range.min])
+            sum_inc = np.sum(arr[index_range.min:index_range.max])
+            sum_range = Range(sum_base, sum_base+sum_inc)
+            sum_ranges.append(sum_range)
+            logging.info(f"got photon count range {h5path} for {index_range} of {sum_range}")
+
+    if use_mm:
+        mm_in = h5pyd.MultiManager(dsets_in)
+        selections = [np.s_[0:index_range.max] for index_range in index_ranges]
+        arrs = mm_in[selections]
+        sum_bases = [np.sum(arr[0:index_range.min]) for arr, index_range in zip(arrs, index_ranges)]
+        sum_incs = [np.sum(arr[index_range.min:index_range.max]) for arr, index_range in zip(arrs, index_ranges)]
+        sum_ranges = [Range(sum_base, sum_base+sum_inc) for sum_base, sum_inc in zip(sum_bases, sum_incs)]
+        logging.info(f"got photon count ranges {h5paths} for {index_ranges} of {sum_ranges}")
+
+    return sum_ranges
 
 
 def save_georegion(fout, bbox):
@@ -287,9 +349,12 @@ with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=p
     copy_root_attrs(fin, fout)
     copy_scalar_datasets(fin, fout)
     save_georegion(fout, bbox)
-    for ground_track in ground_tracks:
+
+    index_ranges = get_index_ranges(fin, ground_tracks, bbox)
+
+    for index_range, ground_track in zip(index_ranges, ground_tracks):
         grp = fout.create_group(ground_track)
-        index_range = get_index_range(fin, ground_track, bbox)
+
         if not index_range:
             msg = f"no index range found for ground track: {ground_track}"
             logging.warning(msg)
@@ -300,19 +365,18 @@ with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=p
         logging.info(f"got_index_range: {index_range[0]}:{index_range[1]}")
         grp.attrs["index_range_min"] = index_range[0]
         grp.attrs["index_range_max"] = index_range[1]
-        # copy lat, lon, and photo count markers
-        for ref_path in reference_datasets:
-            h5path = f"{ground_track}/{ref_path}"
-            copy_dataset_range(fin, fout, h5path, index_range)
 
-        # sum up photon counts for later indexing
-        h5path = f"{ground_track}/geolocation/segment_ph_cnt"
-        count_range = get_photon_count_range(fin, h5path, index_range)
-        
-        logging.info(f"photon count_range: {count_range}")
-        for ref_path in ph_count_datasets:
-           h5path = f"{ground_track}/{ref_path}"
-           copy_dataset_range(fin, fout, h5path, count_range)
+        # copy lat, lon, and photo count markers
+        ref_h5paths = [f"{ground_track}/{ref_path}" for ref_path in reference_datasets]
+        copy_dataset_ranges(fin, fout, ref_h5paths, index_ranges)
+
+        ph_h5paths = [f"{ground_track}/{ref_path}" for ref_path in ph_count_datasets]
+        copy_dataset_ranges(fin, fout, ph_h5paths, index_ranges)
+
+    # sum up photon counts
+    ph_count_h5paths = [f"{ground_track}/geolocation/segment_ph_cnt" for ground_track in ground_tracks]
+    count_ranges = get_photon_count_ranges(fin, ph_count_h5paths, index_ranges)
+    logging.info(f"photon count_ranges: {count_ranges}")
 
 stop_time = time.time()
 dt = datetime.fromtimestamp(start_time)
@@ -327,12 +391,3 @@ csv_str += f"{input_dirname}, {output_dirname}, {input_filename},    , , , , , ,
 if page_buf_size_exp > 0:
     csv_str += f"page_buf_size_exp: {page_buf_size_exp}"
 print(csv_str)
-
-
-        
- 
-
-
-
-
-
