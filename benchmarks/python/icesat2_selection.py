@@ -9,6 +9,7 @@ import h5py
 import h5pyd
 import numpy as np
 import config
+import argparse
 
 ground_tracks = ("gt1l", "gt1r", "gt2l", "gt2r", "gt3l", "gt3r")
 scalar_datasets = ("/orbit_info/sc_orient", 
@@ -33,7 +34,9 @@ geolocation_lon = "/geolocation/reference_photon_lon"
 BBox = namedtuple("BBox", "min_lon max_lon min_lat max_lat")
 Range = namedtuple("Range", "min max")
 
-use_mm = True
+use_multi = False
+input_filetype = None
+output_filetype = None
 
 # copy any attributes from input root group to output root
 def copy_root_attrs(fin, fout):
@@ -48,7 +51,6 @@ def copy_scalar_datasets(fin, fout):
 
     for h5path in scalar_datasets:
         dset = fin[h5path]
-        data = dset[...]
         parts = h5path.split("/")
         grp = fout
         for i in range(len(parts) - 1):
@@ -58,17 +60,21 @@ def copy_scalar_datasets(fin, fout):
             if grp_name not in grp:
                 grp.create_group(grp_name)
             grp = grp[grp_name]
-        if use_mm:
+        if use_multi:
             # create datasets individually with no data, write collectively later
-            d = grp.create_dataset(parts[-1], shape=data.shape, dtype=data.dtype)
+            d = grp.create_dataset(parts[-1], shape=dset.shape, dtype=dset.dtype)
             dsets_out.append(d)
         else:
+            data = dset[...]
             grp.create_dataset(parts[-1], data=data)
 
-    if use_mm:
+    if use_multi:
         dsets_in = [fin[h5path] for h5path in scalar_datasets]
-        mm_in = h5pyd.MultiManager(dsets_in)
-        mm_out = h5pyd.MultiManager(dsets_out)
+
+        mm_in = get_multimanager(dsets_in, input_filetype)
+        mm_out = get_multimanager(dsets_out, output_filetype)
+
+        # Perform multimanager I/O
         mm_out[...] = mm_in[...]
 
 
@@ -130,12 +136,12 @@ def get_index_ranges(fin, ground_tracks, bbox):
     logging.debug(f"get_index_range ground_tracks: {ground_tracks}")
     index_ranges = []
 
-    if use_mm:
+    if use_multi:
         rp_lats = [fin[f"{ground_track}/geolocation/reference_photon_lat"] for ground_track in ground_tracks]
         rp_lons = [fin[f"{ground_track}/geolocation/reference_photon_lon"] for ground_track in ground_tracks]
 
-        mm_lats = h5pyd.MultiManager(rp_lats)
-        mm_lons = h5pyd.MultiManager(rp_lons)
+        mm_lats = get_multimanager(rp_lats, input_filetype)
+        mm_lons = get_multimanager(rp_lons, input_filetype)
 
         rp_lat_arrs = mm_lats[...]
         rp_lon_arrs = mm_lons[...]
@@ -161,11 +167,12 @@ def get_index_ranges(fin, ground_tracks, bbox):
     return index_ranges
 
 # copy given index range from each source dataset to destination dataset
-def copy_dataset_ranges(fin, fout, h5paths, index_ranges):
+def copy_dataset_ranges(fin, fout, h5paths, index_range):
     dsets_in = []
     dsets_out = []
+    selections_in = []
 
-    for h5path, index_range in zip(h5paths, index_ranges):
+    for h5path in h5paths:
         dset_src = fin[h5path]
         parts = h5path.split("/")
         dset_name = parts[-1]
@@ -182,23 +189,25 @@ def copy_dataset_ranges(fin, fout, h5paths, index_ranges):
         dt = dset_src.dtype
         # create the dataset
         shape = [extent,]
-        # for multidimensional datasets, copy the remaing dimensions
+        # for multidimensional datasets, copy the remaining dimensions
         for n in dset_src.shape[1:]:
             shape.append(n)
         dset_des = grp.create_dataset(dset_name, dtype=dt, shape=shape)
         # copy data
         # TBD - paginate
-        if use_mm:
+        if use_multi:
             dsets_in.append(dset_src)
             dsets_out.append(dset_des)
+            selections_in.append(np.s_[index_range.min:index_range.max])
         else:
             arr = dset_src[index_range.min:index_range.max]
             dset_des[:] = arr[:]
 
-    if use_mm:
-        mm_in = h5pyd.MultiManager(dsets_in)
-        mm_out = h5pyd.MultiManager(dsets_out)
-        mm_out[...] = mm_in[...]
+    if use_multi:
+        mm_in = get_multimanager(dsets_in, input_filetype)
+        mm_out = get_multimanager(dsets_out, output_filetype)
+        # potential inf wait with h5py + s3fs?
+        mm_out[...] = mm_in[selections_in]
 
 # sum up all the elements from 0 to index in each dataset
 def get_photon_count_ranges(fin, h5paths, index_ranges):
@@ -207,7 +216,7 @@ def get_photon_count_ranges(fin, h5paths, index_ranges):
 
     for h5path, index_range in zip(h5paths, index_ranges):
         dset = fin[h5path]
-        if use_mm:
+        if use_multi:
             dsets_in.append(dset)
         else:
             arr = dset[0:index_range.max]
@@ -217,8 +226,8 @@ def get_photon_count_ranges(fin, h5paths, index_ranges):
             sum_ranges.append(sum_range)
             logging.info(f"got photon count range {h5path} for {index_range} of {sum_range}")
 
-    if use_mm:
-        mm_in = h5pyd.MultiManager(dsets_in)
+    if use_multi:
+        mm_in = get_multimanager(dsets_in, input_filetype)
         selections = [np.s_[0:index_range.max] for index_range in index_ranges]
         arrs = mm_in[selections]
         sum_bases = [np.sum(arr[0:index_range.min]) for arr, index_range in zip(arrs, index_ranges)]
@@ -281,13 +290,34 @@ def h5File(filepath, mode='r', page_buf_size=None):
         f = h5py.File(filepath, **kwargs)
     return f
 
+# determine the file type based on provided filepath
+def get_filetype(filepath):
+    if filepath.startswith("hdf5://"):
+        return "h5pyd"
+    if filepath.startswith("s3://"):
+        return "h5py+s3fs"
+    if filepath.startswith("http"):
+        return "ros3"
+    return "h5py"
+
+# Get MultiManager based on file type
+def get_multimanager(dsets, filetype):
+    if filetype == "h5pyd":
+        return h5pyd.MultiManager(dsets)
+    elif "h5py" in filetype:
+        return h5py.MultiManager(dsets)
+    else:
+        raise ValueError("MultiManager requires h5py or h5pyd file")
 #
 # main
 #
-if len(sys.argv) > 1:
-    run_number = int(sys.argv[1])
-else:
-    run_number = 1
+parser = argparse.ArgumentParser()
+parser.add_argument("--use_multi", action='store_true', help="Use MultiManager for dataset I/O")
+parser.add_argument("--run_number", type=int, help="Record benchmark iteration, to indicate HSDS cache effectiveness", default=1)
+args = parser.parse_args()
+
+run_number = args.run_number
+use_multi = args.use_multi
 
 # setup logging
 logfname = config.get("log_file")
@@ -318,6 +348,9 @@ if not output_dirname or output_dirname[-1] != '/':
 output_filename = config.get("output_filename")
 output_filepath = f"{output_dirname}{output_filename}"
 logging.info(f"output filepath: {output_filepath}")
+
+input_filetype = get_filetype(input_filepath)
+output_filetype = get_filetype(output_filepath)
 
 min_lon = config.get("min_lon")
 
@@ -352,7 +385,12 @@ with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=p
 
     index_ranges = get_index_ranges(fin, ground_tracks, bbox)
 
-    for index_range, ground_track in zip(index_ranges, ground_tracks):
+    # sum up photon counts
+    ph_count_h5paths = [f"{ground_track}/geolocation/segment_ph_cnt" for ground_track in ground_tracks]
+    count_ranges = get_photon_count_ranges(fin, ph_count_h5paths, index_ranges)
+    logging.info(f"photon count_ranges: {count_ranges}")
+
+    for index_range, count_range, ground_track in zip(index_ranges, count_ranges, ground_tracks):
         grp = fout.create_group(ground_track)
 
         if not index_range:
@@ -368,15 +406,10 @@ with h5File(input_filepath) as fin, h5File(output_filepath, "w", page_buf_size=p
 
         # copy lat, lon, and photo count markers
         ref_h5paths = [f"{ground_track}/{ref_path}" for ref_path in reference_datasets]
-        copy_dataset_ranges(fin, fout, ref_h5paths, index_ranges)
+        copy_dataset_ranges(fin, fout, ref_h5paths, index_range)
 
-        ph_h5paths = [f"{ground_track}/{ref_path}" for ref_path in ph_count_datasets]
-        copy_dataset_ranges(fin, fout, ph_h5paths, index_ranges)
-
-    # sum up photon counts
-    ph_count_h5paths = [f"{ground_track}/geolocation/segment_ph_cnt" for ground_track in ground_tracks]
-    count_ranges = get_photon_count_ranges(fin, ph_count_h5paths, index_ranges)
-    logging.info(f"photon count_ranges: {count_ranges}")
+        ph_h5paths = [f"{ground_track}/{ph_path}" for ph_path in ph_count_datasets]
+        copy_dataset_ranges(fin, fout, ph_h5paths, count_range)
 
 stop_time = time.time()
 dt = datetime.fromtimestamp(start_time)
